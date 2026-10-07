@@ -1,0 +1,137 @@
+export type Mode = "live" | "demo";
+export type Requirement = {
+  id: string;
+  category: string;
+  content: string;
+  expected: string;
+  status: string;
+  response: string;
+  source: string;
+  fileId: string;
+};
+export type Material = {
+  id: string;
+  name: string;
+  spec: string;
+  material: string;
+  unit: string;
+  brand: string;
+  quantity: number | null;
+  tag: string;
+  price: number | null;
+  status: string;
+  source: string;
+  fileId: string;
+  note: string;
+};
+export type Issue = {
+  id: string;
+  title: string;
+  detail: string;
+  severity: "high" | "medium" | "low";
+  status: string;
+  source: string;
+  note: string;
+};
+export type Section = { id: string; title: string; content: string };
+export type Result = {
+  requirements: Requirement[];
+  materials: Material[];
+  issues: Issue[];
+  sections: Section[];
+  summary: string;
+  source: string;
+  updatedAt: string;
+};
+export type ProjectFile = {
+  id: string;
+  name: string;
+  ext: string;
+  size: number;
+  status: string;
+  category: string;
+  textPreview: string;
+  error?: string;
+  parseNote?: string;
+  preview?: string;
+  previewUpdatedAt?: string;
+  cadNote?: string;
+  cadStats?: { entities: number; textItems: number };
+};
+export type Artifact = {
+  id: string;
+  name: string;
+  type: string;
+  mode: Mode;
+  size: number;
+  createdAt: string;
+  source: string;
+};
+export type Project = {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  files: ProjectFile[];
+  results: Record<Mode, Result>;
+  artifacts: Artifact[];
+};
+export type Session = {
+  id: string;
+  projectId: string;
+  mode: Mode;
+  name: string;
+  threadId?: string;
+  model?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Job = {
+  conversationOnly?: boolean;
+  sessionId: string;
+  proposal?: Result;
+  applied?: boolean;
+  id: string;
+  projectId: string;
+  skill: string;
+  title: string;
+  mode: Mode;
+  message: string;
+  status: string;
+  events: { time: string; label: string; detail?: string; kind: string }[];
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  error?: string;
+  threadId?: string;
+  turnId?: string;
+  model?: string;
+  outputText: string;
+  approval?: { id: number; command: string };
+};
+export type Skill = {
+  name: string;
+  title: string;
+  description: string;
+  available: boolean;
+};
+export type Engine = {
+  provider?: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  revision?: number;
+  connected: boolean;
+  authenticated: boolean;
+  model?: string;
+  error?: string;
+};
+export type Bootstrap = {
+  sessions: Session[];
+  brand: string;
+  projects: Project[];
+  jobs: Job[];
+  engine: Engine;
+  skills: Skill[];
+};

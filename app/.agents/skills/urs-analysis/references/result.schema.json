@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 18000
+    },
+    "requirements": {
+      "maxItems": 150,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "expected": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "response": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "fileId": {
+            "type": "string",
+            "maxLength": 18000
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "content",
+          "expected",
+          "status",
+          "response",
+          "source",
+          "fileId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "materials": {
+      "maxItems": 150,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "spec": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "material": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "brand": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "fileId": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 18000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "spec",
+          "material",
+          "unit",
+          "brand",
+          "quantity",
+          "tag",
+          "price",
+          "status",
+          "source",
+          "fileId",
+          "note"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "issues": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 18000
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "detail",
+          "severity",
+          "status",
+          "source",
+          "note"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "sections": {
+      "maxItems": 30,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 18000
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 18000
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "summary",
+    "requirements",
+    "materials",
+    "issues",
+    "sections"
+  ],
+  "additionalProperties": false
+}
