@@ -14,6 +14,24 @@
 
 ## 高位端口直连内测
 
+### 当前选择：不限制 IP，使用账号密码
+
+经用户明确要求，使用 `nginx-account-http.conf.template`，不配置 Nginx 来源 IP 限制；云安全组仅开放 TCP 18082，80 和其他规则不变。应用配置：
+
+```ini
+TONGZHOU_PUBLIC_ORIGIN=http://服务器IP:18082
+TONGZHOU_ALLOW_HTTP_INTERNAL_TEST=1
+TONGZHOU_HTTP_TEST_ALLOW_ANY_IP=1
+TONGZHOU_HTTP_TEST_ALLOWED_IPS=
+TONGZHOU_WORKSPACE_USERNAME=tongzhou
+```
+
+还须设置独立密码哈希和会话签名密钥。无 IP 限制模式必须显式开启并配置非空账号，否则拒绝启动；所有项目 API、文件下载、事件流均需登录。错误账号与错误密码使用统一提示，仍按来源限制登录尝试。修改账号会使旧登录签名失效，修改密码时也应更新签名密钥。
+
+这是 HTTP 内测入口，登录页明确标注未加密，不冒充 HTTPS。`tongzhou` 是共享工作区账号，不是 Linux/root 账号；不是多用户权限系统。密码仅保留在私有交付文件中，不进入 Git。
+
+### 可选：限制团队出口 IP
+
 用户要求不占用 80，团队直接访问 `http://服务器IP:18082` 时，使用 `nginx-internal-http.conf.template` 增加独立站点。默认只允许回环地址，并 `deny all`；收到并确认团队公网出口 IP 后，再在 Nginx、应用配置和云安全组三处同步放行，不修改旧站点。
 
 ```ini
@@ -23,7 +41,7 @@ TONGZHOU_ALLOW_HTTP_INTERNAL_TEST=1
 TONGZHOU_HTTP_TEST_ALLOWED_IPS=127.0.0.1,团队公网IP1,团队公网IP2
 ```
 
-同时配置独立 `TONGZHOU_PASSWORD_HASH`、`TONGZHOU_AUTH_SECRET`。这是受登录密码和来源 IP 限制的 **HTTP 内测**，不是 HTTPS；登录页明确标注未加密，不复用 SSH 密码。HTTP 模式默认关闭，未显式开启、无有效 IP 白名单或端口低于 1024 时启动失败；未登录 API 返回 401。Nginx 保留 Host 中的端口并覆盖转发来源地址；不要把应用直接绑定公网，也不要省略 `deny all`。
+同时配置独立 `TONGZHOU_PASSWORD_HASH`、`TONGZHOU_AUTH_SECRET`，保持 `TONGZHOU_HTTP_TEST_ALLOW_ANY_IP=0`。这是受登录密码和来源 IP 限制的 **HTTP 内测**，不是 HTTPS；登录页明确标注未加密，不复用 SSH 密码。HTTP 模式默认关闭；未显式开启、未满足所选认证模式要求或端口低于 1024 时启动失败；未登录 API 返回 401。Nginx 保留 Host 中的端口并覆盖转发来源地址；不要把应用直接绑定公网，此白名单模式不省略 `deny all`。
 
 公网放行前先在服务器经 Nginx 验证登录、会话、上传、导出和 Host/Origin 校验；放行后再从实际团队网络验证浏览器全流程。办公出口变动时须更新三处白名单。
 
@@ -59,4 +77,4 @@ nginx -t
 
 ## 范围
 
-这是**共享工作区**：获准成员共用同一组项目，并非多租户平台，没有逐用户权限和租户隔离。SSH 模式由 SSH 认证保护连接；直连模式另用独立工作区密码。HTTPS Cookie 为 Secure、HttpOnly、SameSite=Strict，12 小时过期；显式 HTTP 内测模式使用非 Secure 的独立 Cookie，并强制来源 IP 白名单。所有模式均限制 Host/Origin 并保留写入请求头校验。
+这是**共享工作区**：获准成员共用同一组项目，并非多租户平台，没有逐用户权限和租户隔离。SSH 模式由 SSH 认证保护连接；直连模式另用独立工作区密码。HTTPS Cookie 为 Secure、HttpOnly、SameSite=Strict，12 小时过期；显式 HTTP 内测模式使用非 Secure 的独立 Cookie，可选来源 IP 白名单或经明确开启的不限 IP 账号登录。所有模式均限制 Host/Origin 并保留写入请求头校验。

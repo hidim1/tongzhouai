@@ -4,7 +4,7 @@
 
 ## 直接使用
 
-服务器版本已部署非 root 后台服务、服务器会话持久化与仅本机开放的出站代理。团队直连内测使用独立 **18082 端口 + 来源 IP 白名单 + 工作区密码（HTTP）**，不占用 80；实际放行进度见 [部署验收](deploy/ACCEPTANCE.md)。可选 SSH 私有模式的启动器见 [deploy/private-access](deploy/private-access/README.md)，配置见 [deploy/README.md](deploy/README.md)。公网 HTTPS 尚未打通。云端为共享工作区，不是多租户平台；不自动上传本机客户资料。
+服务器版本已部署非 root 后台服务、服务器会话持久化与仅本机开放的出站代理。按用户要求，团队直连内测使用独立 **18082 端口 + 账号密码（HTTP），不限制来源 IP**，不占用 80；实际放行与测试进度见 [部署验收](deploy/ACCEPTANCE.md)。可选 IP 白名单/SSH 模式配置见 [deploy/README.md](deploy/README.md)。公网 HTTPS 尚未打通。云端为共享工作区，不是多租户平台；不自动上传本机客户资料。
 
 - Mac Apple Silicon：`app/release/Tongzhou-AI-0.2.2-mac-arm64.dmg`，或同目录 ZIP 中的「同舟 AI.app」。
 - Windows x64：`app/release/Tongzhou-AI-0.2.2-win-x64.exe`，可选安装位置，创建开始菜单/桌面快捷方式。

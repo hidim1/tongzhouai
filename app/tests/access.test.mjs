@@ -251,3 +251,101 @@ test("HTTP internal testing requires explicit opt-in, high port, source IP and s
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("explicit unrestricted HTTP mode requires both account and password for every source IP", async () => {
+  const password = "unrestricted-test-passphrase";
+  const options = {
+    origin: "http://workspace.example:18082",
+    passwordHash: await hashPassword(password),
+    sessionSecret: "c".repeat(64),
+    username: "tongzhou",
+    allowHttpTest: true,
+    httpTestAllowAnyIP: true,
+    httpTestAllowedIPs: "",
+  };
+  assert.throws(() => createAccessGuard({ ...options, username: "" }));
+  assert.throws(() => createAccessGuard({ ...options, username: "<invalid>" }));
+  assert.throws(() =>
+    createAccessGuard({ ...options, httpTestAllowAnyIP: false }),
+  );
+  assert.throws(() => createAccessGuard({ ...options, sessionSecret: "" }));
+  const app = express();
+  app.set("trust proxy", "loopback");
+  app.use(createAccessGuard(options));
+  app.use((_req, res) => res.json({ protected: true }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = (url, o = {}) =>
+    requestRaw(base + url, {
+      ...o,
+      headers: {
+        Host: "workspace.example:18082",
+        "X-Forwarded-For": "192.0.2.10",
+        ...o.headers,
+      },
+    });
+  const login = (username, value = password) =>
+    request("/login", {
+      method: "POST",
+      headers: {
+        Origin: options.origin,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ username, password: value }),
+    });
+  try {
+    const page = await (await request("/login")).text();
+    assert.match(page, /name="username"/);
+    assert.match(page, /HTTP 内测（未加密，账号密码登录）/);
+    assert.doesNotMatch(page, /限定来源 IP/);
+    for (const ip of ["192.0.2.10", "203.0.113.24", "2001:db8::1"]) {
+      assert.equal(
+        (await request("/login", { headers: { "X-Forwarded-For": ip } }))
+          .status,
+        200,
+      );
+      assert.equal(
+        (
+          await request("/api/bootstrap", {
+            headers: { "X-Forwarded-For": ip },
+          })
+        ).status,
+        401,
+      );
+    }
+    assert.equal((await login("")).status, 401);
+    const wrongAccount = await login("wrong-account");
+    assert.equal(wrongAccount.status, 401);
+    assert.match(await wrongAccount.text(), /账号或密码不正确/);
+    assert.equal(
+      (await login(options.username, "wrong-test-password")).status,
+      401,
+    );
+    const authenticated = await login(options.username);
+    assert.equal(authenticated.status, 303);
+    const cookie = authenticated.headers.get("set-cookie").split(";")[0];
+    assert.equal(
+      (
+        await request("/api/bootstrap", {
+          headers: { Cookie: cookie, "X-Forwarded-For": "203.0.113.24" },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await request("/api/bootstrap", {
+          headers: { Cookie: cookie, Origin: "http://evil.example:18082" },
+        })
+      ).status,
+      403,
+    );
+    for (let i = 0; i < 6; i++)
+      assert.equal((await login("wrong-account")).status, 401);
+    assert.equal((await login(options.username)).status, 429);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

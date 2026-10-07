@@ -12,13 +12,16 @@ export async function hashPassword(password) {
   return `${salt}:${key.toString("hex")}`;
 }
 
-// HTTPS is the default. HTTP requires explicit high-port, IP-restricted test mode.
+// HTTPS is the default. HTTP needs an explicit high-port test mode; unrestricted
+// HTTP additionally requires an account name and a separate explicit opt-in.
 // No public origin means the original local-only/desktop boundary stays intact.
 export function createAccessGuard({
   origin = process.env.TONGZHOU_PUBLIC_ORIGIN,
   passwordHash = process.env.TONGZHOU_PASSWORD_HASH,
   sessionSecret = process.env.TONGZHOU_AUTH_SECRET,
+  username = process.env.TONGZHOU_WORKSPACE_USERNAME || "",
   allowHttpTest = process.env.TONGZHOU_ALLOW_HTTP_INTERNAL_TEST === "1",
+  httpTestAllowAnyIP = process.env.TONGZHOU_HTTP_TEST_ALLOW_ANY_IP === "1",
   httpTestAllowedIPs = process.env.TONGZHOU_HTTP_TEST_ALLOWED_IPS || "",
   now = Date.now,
 } = {}) {
@@ -37,14 +40,16 @@ export function createAccessGuard({
       (publicUrl.protocol !== "https:" && !httpTest) ||
       (httpTest &&
         (Number(publicUrl.port) < 1024 ||
-          !allowedIPs.size ||
+          (!httpTestAllowAnyIP && !allowedIPs.size) ||
+          (httpTestAllowAnyIP && !username) ||
           [...allowedIPs].some((ip) => !isIP(ip)))) ||
+      (username && !/^[A-Za-z0-9._@-]{1,64}$/.test(username)) ||
       publicUrl.origin !== origin ||
       !/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(passwordHash || "") ||
       !/^[a-f0-9]{64}$/.test(sessionSecret || "")
     )
       throw new Error(
-        "部署需要 HTTPS origin、密码哈希和独立会话密钥；HTTP 内测须显式启用高位端口及来源 IP 白名单",
+        "部署需要有效 origin、密码哈希和独立会话密钥；HTTP 内测须显式启用高位端口，并配置 IP 白名单或显式开放来源的账号登录",
       );
   }
   const cookieName = httpTest
@@ -53,7 +58,7 @@ export function createAccessGuard({
   const cookieFlags = `HttpOnly; ${httpTest ? "" : "Secure; "}SameSite=Strict; Path=/`;
   const sign = (value) =>
     createHmac("sha256", sessionSecret)
-      .update(`${origin}\n${value}`)
+      .update(`${origin}\n${username}\n${value}`)
       .digest("hex");
   const sessions = (cookie) => {
     const value = String(cookie || "")
@@ -71,11 +76,13 @@ export function createAccessGuard({
   };
   const form = express.urlencoded({ extended: false, limit: "1kb" });
   const attempts = new Map();
+  const invalidCredentials = username ? "账号或密码不正确" : "访问密码不正确";
   const page = (message = "") =>
-    `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登录 · 同舟 AI</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f6fa;color:#20304b;font-family:system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}.card{background:white;border:1px solid #e0e8ee;border-radius:20px;padding:40px;width:min(420px,92vw);box-shadow:0 20px 70px #20304b12}.brand{color:#0094c8;font-size:13px;letter-spacing:3px}h1{font-size:28px;margin-bottom:10px}p{font-size:14px;color:#718096;line-height:1.7}label{display:block;margin-top:28px;font-size:14px}input,button{width:100%;padding:14px;border-radius:9px;font:inherit;margin-top:10px}input{border:1px solid #cdd9e1}button{border:0;background:#2083a2;color:white;cursor:pointer}.error{color:#b43e46;min-height:20px}.foot{font-size:12px;margin-top:24px}</style><main class="card"><div class="brand">CROSSFLOW · 同舟纵横</div><h1>同舟 AI</h1><p>工程智能工作台<br>输入工作区访问密码，开始协作。</p><form method="post" action="/login"><label for="password">工作区访问密码</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required autofocus><button type="submit">进入工作台</button></form><p class="error" role="alert">${message}</p><p class="foot">独立工作区 · ${httpTest ? "HTTP 内测（未加密，限定来源 IP）" : "HTTPS 加密连接"}<br>项目与会话保存在服务器，共用此密码的成员可访问同一工作区。</p></main></html>`;
+    `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登录 · 同舟 AI</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f6fa;color:#20304b;font-family:system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}.card{background:white;border:1px solid #e0e8ee;border-radius:20px;padding:40px;width:min(420px,92vw);box-shadow:0 20px 70px #20304b12}.brand{color:#0094c8;font-size:13px;letter-spacing:3px}h1{font-size:28px;margin-bottom:10px}p{font-size:14px;color:#718096;line-height:1.7}label{display:block;margin-top:28px;font-size:14px}input,button{width:100%;padding:14px;border-radius:9px;font:inherit;margin-top:10px}input{border:1px solid #cdd9e1}button{border:0;background:#2083a2;color:white;cursor:pointer}.error{color:#b43e46;min-height:20px}.foot{font-size:12px;margin-top:24px}</style><main class="card"><div class="brand">CROSSFLOW · 同舟纵横</div><h1>同舟 AI</h1><p>工程智能工作台<br>输入${username ? "账号和密码" : "工作区访问密码"}，开始协作。</p><form method="post" action="/login">${username ? '<label for="username">工作区账号</label><input id="username" name="username" type="text" autocomplete="username" maxlength="64" required autofocus>' : ""}<label for="password">工作区访问密码</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required ${username ? "" : "autofocus"}><button type="submit">进入工作台</button></form><p class="error" role="alert">${message}</p><p class="foot">独立工作区 · ${httpTest ? (httpTestAllowAnyIP ? "HTTP 内测（未加密，账号密码登录）" : "HTTP 内测（未加密，限定来源 IP）") : "HTTPS 加密连接"}<br>项目与会话保存在服务器，共用此${username ? "账号" : "密码"}的成员可访问同一工作区。</p></main></html>`;
   return function access(req, res, next) {
     if (
       httpTest &&
+      !httpTestAllowAnyIP &&
       !allowedIPs.has(String(req.ip || "").replace(/^::ffff:/, ""))
     )
       return res.status(403).send("来源 IP 不在内测白名单中");
@@ -127,16 +134,19 @@ export function createAccessGuard({
           password.length < 12 ||
           password.length > 256
         )
-          return res.status(401).type("html").send(page("访问密码不正确"));
+          return res.status(401).type("html").send(page(invalidCredentials));
         try {
           const [salt, expected] = passwordHash.split(":");
-          if (
-            !same(
-              await derive(password, salt, 64),
-              Buffer.from(expected, "hex"),
-            )
-          )
-            return res.status(401).type("html").send(page("访问密码不正确"));
+          const passwordValid = same(
+            await derive(password, salt, 64),
+            Buffer.from(expected, "hex"),
+          );
+          const usernameValid =
+            !username ||
+            (typeof req.body?.username === "string" &&
+              same(Buffer.from(req.body.username), Buffer.from(username)));
+          if (!passwordValid || !usernameValid)
+            return res.status(401).type("html").send(page(invalidCredentials));
           attempts.delete(address);
           const expiry = String(Math.floor(now() / 1000) + lifetime);
           res.set(
