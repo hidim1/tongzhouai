@@ -11,6 +11,7 @@ reference_materials/
 vendor/
 app/docs/screenshots/
 app/docs/protocol/
+app/docs/IMPLEMENTATION.md
 .env
 .env.*
 !.env.example

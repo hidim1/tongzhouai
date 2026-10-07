@@ -5,7 +5,7 @@
 ## 布局与运行边界
 
 - `/opt/tongzhou-ai/releases/<commit>/`：从 Git 提交导出的代码，根目录只读；`current` 指向当前版本。
-- `/opt/tongzhou-runtime/`：独立 Node 24、Codex 的 npm 包、LibreDWG、Certbot；不替换其他业务的系统 Node。
+- `/opt/tongzhou-runtime/`：独立 Node 24、LibreDWG、Certbot；Codex 位于每个 release 的官方 npm 平台包中。不替换其他业务的系统 Node。
 - `/var/lib/tongzhou-ai/`：工作区与独立 Codex 会话，由 `tongzhou-ai` 非 root 用户管理。
 - `/etc/tongzhou-ai.env`：0600，包含密码哈希和独立 Cookie 签名密钥，不含 SSH 密码。
 - `/var/lib/tongzhou-ai/private/provider.json`：0600，独立部署的 API 凭据，不进入 Git 或安装包。
