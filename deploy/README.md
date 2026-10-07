@@ -10,13 +10,13 @@
 - `/etc/tongzhou-ai.env`：0600，包含密码哈希和独立 Cookie 签名密钥，不含 SSH 密码。
 - `/var/lib/tongzhou-ai/private/provider.json`：0600，独立部署的 API 凭据，不进入 Git 或安装包。
 - Mihomo 仅监听 `127.0.0.1:17890`，不使用 TUN，不改系统路由；代理环境变量只给本应用和部署工具使用。
-- Express 仅监听 `127.0.0.1:4318`。可配置 SSH 私有入口、团队 IP 白名单高位端口 HTTP 内测入口或可信 HTTPS 入口；实际放行进度以 [验收记录](ACCEPTANCE.md) 为准。
+- Express 仅监听 `127.0.0.1:4318`。可配置 SSH 私有入口、高位端口 HTTP 内测入口（账号密码或 IP 白名单）或可信 HTTPS 入口；实际放行进度以 [验收记录](ACCEPTANCE.md) 为准。
 
 ## 高位端口直连内测
 
 ### 当前选择：不限制 IP，使用账号密码
 
-经用户明确要求，使用 `nginx-account-http.conf.template`，不配置 Nginx 来源 IP 限制；云安全组仅开放 TCP 18082，80 和其他规则不变。应用配置：
+经用户明确要求，使用 `nginx-account-http.conf.template`，不配置 Nginx 来源 IP 限制；本轮云安全组仅新增 TCP 18082 放行，80 和其他规则不变。应用配置：
 
 ```ini
 TONGZHOU_PUBLIC_ORIGIN=http://服务器IP:18082
@@ -73,7 +73,7 @@ systemctl list-timers tongzhou-certificate-renew.timer
 nginx -t
 ```
 
-回滚：将 `current` 软链接指向上一 release 并重启 `tongzhou-ai`；不要覆盖或删除数据目录。更新前备份 `/var/lib/tongzhou-ai`。更换访问密码时同时更换 `TONGZHOU_AUTH_SECRET`，使既有 Cookie 失效。订阅文件与代理节点凭据仅在服务器权限受限目录保存，不提交到仓库。
+回滚：代码、认证环境、Nginx 入口策略必须成组恢复；不要仅切旧代码而沿用不兼容的新版认证环境。此次从账号模式退回白名单模式时，先恢复 `/etc/nginx/sites-available/tongzhou-ai-internal.before-account` 并检查、重载 Nginx，重新限制入口；再恢复 `/etc/tongzhou-ai.env.before-account`，切换 `current` 到 `35f662afc470` 并重启 `tongzhou-ai`。不要覆盖或删除数据目录。更新前备份 `/var/lib/tongzhou-ai`。更换访问密码时同时更换 `TONGZHOU_AUTH_SECRET`，使既有 Cookie 失效。订阅文件与代理节点凭据仅在服务器权限受限目录保存，不提交到仓库。
 
 ## 范围
 
