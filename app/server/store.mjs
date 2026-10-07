@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DATA } from "./config.mjs";
+import { migrateProjectBranding } from "./branding.mjs";
 fs.mkdirSync(DATA, { recursive: true });
 const dbPath = path.join(DATA, "workspace.json");
 export const store = fs.existsSync(dbPath)
@@ -37,6 +38,7 @@ export function save() {
   fs.writeFileSync(temp, JSON.stringify(store, null, 2));
   fs.renameSync(temp, dbPath);
 }
+if (migrateProjectBranding(store.projects)) save();
 export const uid = (prefix = "id") => prefix + "-" + randomUUID().slice(0, 8);
 export const timestamp = () => new Date().toISOString();
 export function getProject(id) {
