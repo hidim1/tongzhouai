@@ -59,4 +59,4 @@ nginx -t
 
 ## 范围
 
-这是**共享工作区**：获准成员共用同一组项目，并非多租户平台，没有逐用户权限和租户隔离。当前 SSH 模式由 SSH 认证保护连接；可选 HTTPS 模式另外使用独立工作区密码，Cookie 为 Secure、HttpOnly、SameSite=Strict，12 小时过期。两种模式均限制 Host/Origin 并保留写入请求头校验。
+这是**共享工作区**：获准成员共用同一组项目，并非多租户平台，没有逐用户权限和租户隔离。SSH 模式由 SSH 认证保护连接；直连模式另用独立工作区密码。HTTPS Cookie 为 Secure、HttpOnly、SameSite=Strict，12 小时过期；显式 HTTP 内测模式使用非 Secure 的独立 Cookie，并强制来源 IP 白名单。所有模式均限制 Host/Origin 并保留写入请求头校验。
