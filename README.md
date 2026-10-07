@@ -4,7 +4,7 @@
 
 ## 直接使用
 
-服务器部署支持独立 HTTPS 登录入口、非 root 后台服务、服务器会话持久化与仅本机开放的出站代理。部署模板和运维说明见 [deploy/README.md](deploy/README.md)。云端为受密码保护的共享工作区，不是多租户平台；不自动上传本机客户资料。
+服务器版本已部署非 root 后台服务、服务器会话持久化与仅本机开放的出站代理。**当前通过 SSH 私有隧道访问，公网 HTTPS 尚未打通**；启动器见 [deploy/private-access](deploy/private-access/README.md)，部署与验收见 [deploy/README.md](deploy/README.md)。云端为共享工作区，不是多租户平台；不自动上传本机客户资料。可选 HTTPS 独立密码登录能力与部署模板已提供，但不能据此认为公网入口已经可用。
 
 - Mac Apple Silicon：`app/release/Tongzhou-AI-0.2.2-mac-arm64.dmg`，或同目录 ZIP 中的「同舟 AI.app」。
 - Windows x64：`app/release/Tongzhou-AI-0.2.2-win-x64.exe`，可选安装位置，创建开始菜单/桌面快捷方式。

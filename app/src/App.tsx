@@ -449,7 +449,7 @@ export function App() {
           <div className="profile">
             <div>舟</div>
             <span>
-              工程工作区<small>本地保存</small>
+              工程工作区<small>{data.server ? "服务器保存" : "本地保存"}</small>
             </span>
             <MoreHorizontal size={18} />
           </div>
@@ -841,7 +841,9 @@ export function App() {
                   </span>
                   <span>
                     {mode === "live"
-                      ? "资料本地保存 · 模型云端推理"
+                      ? data.server
+                        ? "资料服务器保存 · 模型云端推理"
+                        : "资料本地保存 · 模型云端推理"
                       : "演示数据 · 非正式交付"}
                   </span>
                 </div>

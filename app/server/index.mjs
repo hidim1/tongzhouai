@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
-import { ROOT, DATA, SKILLS, skillNames } from "./config.mjs";
+import { ROOT, DATA, SKILLS, skillNames, SERVER } from "./config.mjs";
 import {
   store,
   save,
@@ -98,6 +98,7 @@ const getJob = (id) => {
 app.get("/api/bootstrap", (req, res) =>
   res.json({
     cloud: !!process.env.TONGZHOU_PUBLIC_ORIGIN,
+    server: SERVER,
     brand: store.brand,
     projects: store.projects.map(cleanProject),
     jobs: store.jobs,

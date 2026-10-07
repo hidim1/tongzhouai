@@ -129,6 +129,7 @@ export type Engine = {
 };
 export type Bootstrap = {
   cloud?: boolean;
+  server?: boolean;
   sessions: Session[];
   brand: string;
   projects: Project[];

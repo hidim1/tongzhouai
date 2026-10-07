@@ -1,6 +1,9 @@
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+export const SERVER =
+  process.env.TONGZHOU_DEPLOYMENT === "server" ||
+  Boolean(process.env.TONGZHOU_PUBLIC_ORIGIN);
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
