@@ -15,6 +15,8 @@ cleanup_failed() {
   fi
 }
 trap cleanup_failed EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 if ! /usr/bin/ssh -F /dev/null -S "$SOCKET" -O check "$TARGET" >/dev/null 2>&1; then
   if /usr/sbin/lsof -nP -iTCP:14318 -sTCP:LISTEN >/dev/null 2>&1; then
@@ -32,14 +34,23 @@ fi
 
 ready=0
 for attempt in {1..15}; do
-  if /usr/bin/curl --noproxy '*' -fsS --max-time 3 "$URL/api/bootstrap" | /usr/bin/grep -q '"brand"'; then
-    ready=1; break
+  if payload=$(/usr/bin/curl --noproxy '*' -fsS --max-time 3 "$URL/api/bootstrap"); then
+    case "$payload" in *'"brand"'*) ready=1; break;; esac
   fi
   sleep 1
 done
 [ "$ready" = 1 ] || fail "SSH 已连接，但同舟 AI 服务未响应。请检查服务器 tongzhou-ai 服务。"
-new_connection=0
-printf '\n已连接：%s\n流量通过 SSH 加密，项目保存在服务器。\n用「停止同舟AI隧道.command」断开连接；本窗口可以关闭。\n' "$URL"
+printf '\n已连接：%s\n流量通过 SSH 加密，项目保存在服务器。\n' "$URL"
 if [ "${TONGZHOU_NO_BROWSER:-0}" != 1 ]; then
   /usr/bin/open "$URL"
+fi
+if [ "$new_connection" = 1 ]; then
+  printf '请保持本窗口开启。Ctrl+C、关闭窗口或运行停止脚本可断开连接。\n'
+  while /usr/bin/ssh -F /dev/null -S "$SOCKET" -O check "$TARGET" >/dev/null 2>&1; do
+    sleep 3
+  done
+  new_connection=0
+  printf '\n隧道已断开。若需继续使用，请重新运行启动器。\n'
+else
+  printf '已复用现有隧道，请保持原来的连接窗口开启。本窗口可关闭。\n'
 fi
