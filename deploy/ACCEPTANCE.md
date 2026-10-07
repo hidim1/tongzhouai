@@ -4,11 +4,11 @@
 
 ## 已完成
 
-- 私有仓库 `hidim1/tongzhouai` 已推送；当前应用源码部署基线 `9293318ee266`。
+- 私有仓库 `hidim1/tongzhouai` 已推送；当前应用源码部署基线 `808303c6e126`。
 - Ubuntu 24.04 / x86_64，独立 Node 24.21.0、官方 Codex 0.160.1、LibreDWG 0.14、中文字体就绪。
 - `tongzhou-ai.service`、`tongzhou-proxy.service` 已启动并启用开机启动。应用使用非 root 用户，代理仅监听 `127.0.0.1:17890`，应用仅监听 `127.0.0.1:4318`。
 - Mikoto 凭据通过 SSH 单独配置，没有推送到 Git。客户资料、本机历史会话、订阅凭据、SSH 密码均未进入仓库。
-- 增加账号认证、HTTP 内测访问边界和非安全上下文手工条目 ID 回归测试后，本机自动测试 27/27 通过；Linux 测试 26 通过、1 跳过、0 失败。跳过项依赖本机客户 DOC 样例，该样例没有上传服务器。
+- 增加账号认证、HTTP 内测访问边界和非安全上下文手工条目 ID 回归测试后，本机自动测试 30/30 通过；Linux 测试 29 通过、1 跳过、0 失败。跳过项依赖本机客户 DOC 样例，该样例没有上传服务器。
 - Linux 原生构建通过，生产前端已部署。
 - 从服务器调用真实模型，两轮均回答「我是同舟 AI，同舟纵横的工程智能助手」，沿用同一原生 threadId。
 - 合成设计资料上传、真实 URS 提取（流量与材质）、人工采纳通过；DOCX 回读包含 316L。XLSX 包结构通过，此轮没有生成 BOM，不把空 BOM 导出误报成材料识别通过。
@@ -69,3 +69,16 @@
 - 不限 IP 不等于免登录；6 次失败后的登录限流保留并经自动测试。账号为共享工作区账号，非 root，也没有逐成员权限隔离。HTTP 未加密标识保留，未冒充已开通 HTTPS。
 
 本机证据（不进入 Git）：`app/data/qa/account-public-api.json`、`account-public-browser.json`、`account-public-login.png`、`account-public-workspace.png`、`cloud-18082-rule-applied.png`、`tests-account-http.log`。Linux 测试/构建日志位于 `/var/lib/tongzhou-ai/tests-account-http.log` 与 `build-account-http.log`。
+
+## 2026-10-07 19:38（UTC+8）：品牌清理与完整业务流程复测
+
+- 用户要求移除前端“鼎什么 AI 支持”。定位到本机示范项目默认描述“鼎捷 AI 赋能 · 同舟纵横流体技术”，改为“同舟纵横流体技术”。默认种子和旧工作区精确匹配迁移均已修改；本机浏览器项目卡片已确认。自定义描述、上传文件及正文不改，备份前后比对仅这一处默认描述发生变化。
+- 本机和服务器代码升级到 `808303c6e126`；此轮没有重新打包 Mac/Windows 安装器，不把网站更新等同于安装包更新。
+- 公网真实浏览器新建“公网完整流程验收 · 20261007”（`project-06a2620d`），上传纯合成 `public-flow-acceptance.txt`。真实 `urs-analysis` 提取 3 条需求：`12 m³/h`、`0.6 MPa`、`316L`，在页面人工采纳。缺少的价格、交期、泵扬程、电机功率保持待确认。
+- 实测发现第一轮 `bom-draft` 将设备名称填进 material 字段。已在输出 JSON Schema 与 Skill 中区分“设备名”和“材质牌号”，并修复已有项目只复制缺失 Skill、不会获得升级内容的问题；不后处理伪造模型答案。
+- 相同输入重新调用真实模型，V-101 手动球阀与 P-101 离心泵的 material 均正确为 `316L`，数量分别 `2`、`1`，price 均为 null；文件来源正确。页面采纳后保留 3 条需求与 4 个待确认问题，没有增加重复物料。三轮任务 `job-b5092463`、`job-1b21f840`、`job-72b3280c` 使用同一原生 threadId `01a11623-f2bc-7703-9048-9805e064a894`，跨服务升级继续会话成功。
+- 从页面生成 Word 和 Excel，成果中心出现记录；通过鉴权公网接口下载实际文件。OOXML 完整性与文本回读通过；ExcelJS 回读 D5/D6 为 `316L`，G5/G6 为 `2`/`1`，H5/H6 为空，I5/I6 为对应位号；Word 包含三项设计参数和两项位号。
+- **仍未确认：内置浏览器自动保存下载。** 页面点击及直接下载工具都没有确认文件落盘；公网接口下载和文件回读正常。不能声称普通用户浏览器下载保存这一环已验收通过。未绕过浏览器安全提示。
+- 本机自动测试 30/30；Linux 29 通过、1 跳过（本机客户 DOC 样例未上传）、0 失败；构建通过；本次公网浏览器控制台未见 warn/error。`skill-creator` 的 Python 快速校验器因缺少 PyYAML 未运行完成；Skill 入口、JSON Schema 同步及旧项目更新由 Node 自动测试验证，不将其报告为 Python 校验通过。
+
+本机证据：`app/data/qa/branding-removed.png`、`full-public-flow.json`、`full-flow-export-readback.json`、`full-flow-output.docx`、`full-flow-output.xlsx`、`full-flow-verified.png`、`tests-bom-fields.log`；不进入 Git。
