@@ -39,3 +39,14 @@ export function date(s: string) {
 export function active(status: string) {
   return ["queued", "running", "approval"].includes(status);
 }
+
+// getRandomValues also works on IP-based HTTP internal-test pages, where
+// randomUUID (a secure-context-only API) may be unavailable.
+export function manualRowId() {
+  return (
+    "manual-" +
+    Array.from(crypto.getRandomValues(new Uint8Array(8)), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("")
+  );
+}

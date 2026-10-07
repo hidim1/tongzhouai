@@ -140,3 +140,114 @@ test("local-only access remains the default", async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("HTTP internal testing requires explicit opt-in, high port, source IP and signed login", async () => {
+  const password = "internal-test-passphrase";
+  const options = {
+    origin: "http://workspace.example:18082",
+    passwordHash: await hashPassword(password),
+    sessionSecret: "b".repeat(64),
+    allowHttpTest: true,
+    httpTestAllowedIPs: "127.0.0.1,192.0.2.10",
+  };
+  assert.throws(() => createAccessGuard({ ...options, allowHttpTest: false }));
+  assert.throws(() =>
+    createAccessGuard({ ...options, origin: "http://workspace.example" }),
+  );
+  assert.throws(() =>
+    createAccessGuard({ ...options, httpTestAllowedIPs: "" }),
+  );
+  assert.throws(() =>
+    createAccessGuard({ ...options, httpTestAllowedIPs: "0.0.0.0/0" }),
+  );
+  assert.throws(() => createAccessGuard({ ...options, passwordHash: "bad" }));
+  const app = express();
+  // The production proxy overwrites X-Forwarded-For and the backend binds loopback.
+  app.set("trust proxy", "loopback");
+  app.use(createAccessGuard(options));
+  app.use((_req, res) => res.json({ protected: true }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = (url, o = {}) =>
+    requestRaw(base + url, {
+      ...o,
+      headers: { Host: "workspace.example:18082", ...o.headers },
+    });
+  try {
+    assert.equal((await request("/api/bootstrap")).status, 401);
+    assert.equal(
+      (
+        await request("/login", {
+          headers: { "X-Forwarded-For": "192.0.2.11" },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await request("/login", {
+          headers: { "X-Forwarded-For": "192.0.2.10" },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await request("/login", {
+          headers: { Host: "workspace.example:18083" },
+        })
+      ).status,
+      403,
+    );
+    assert.match(
+      await (await request("/login")).text(),
+      /HTTP 内测（未加密，限定来源 IP）/,
+    );
+    const authenticated = await request("/login", {
+      method: "POST",
+      headers: {
+        Origin: options.origin,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ password }),
+    });
+    assert.equal(authenticated.status, 303);
+    const cookieHeader = authenticated.headers.get("set-cookie");
+    assert.match(cookieHeader, /^tongzhou_internal_18082=/);
+    assert.match(cookieHeader, /HttpOnly; SameSite=Strict/);
+    assert.doesNotMatch(cookieHeader, /Secure|__Host-/);
+    const cookie = cookieHeader.split(";")[0];
+    assert.equal(
+      (await request("/api/bootstrap", { headers: { Cookie: cookie } })).status,
+      200,
+    );
+    assert.equal(
+      (
+        await request("/api/bootstrap", {
+          headers: { Cookie: cookie, "X-Forwarded-For": "192.0.2.11" },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await request("/api/bootstrap", {
+          headers: { Cookie: cookie, Origin: "http://evil.example:18082" },
+        })
+      ).status,
+      403,
+    );
+    const logout = await request("/logout", {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: options.origin },
+    });
+    assert.match(
+      logout.headers.get("set-cookie"),
+      /^tongzhou_internal_18082=.*Max-Age=0/,
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

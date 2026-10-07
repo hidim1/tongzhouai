@@ -10,9 +10,24 @@
 - `/etc/tongzhou-ai.env`：0600，包含密码哈希和独立 Cookie 签名密钥，不含 SSH 密码。
 - `/var/lib/tongzhou-ai/private/provider.json`：0600，独立部署的 API 凭据，不进入 Git 或安装包。
 - Mihomo 仅监听 `127.0.0.1:17890`，不使用 TUN，不改系统路由；代理环境变量只给本应用和部署工具使用。
-- Express 仅监听 `127.0.0.1:4318`。当前采用 **SSH 私有入口**，由 SSH 认证；公网 HTTPS 尚未启用。
+- Express 仅监听 `127.0.0.1:4318`。可配置 SSH 私有入口、团队 IP 白名单高位端口 HTTP 内测入口或可信 HTTPS 入口；实际放行进度以 [验收记录](ACCEPTANCE.md) 为准。
 
-## 当前私有入口
+## 高位端口直连内测
+
+用户要求不占用 80，团队直接访问 `http://服务器IP:18082` 时，使用 `nginx-internal-http.conf.template` 增加独立站点。默认只允许回环地址，并 `deny all`；收到并确认团队公网出口 IP 后，再在 Nginx、应用配置和云安全组三处同步放行，不修改旧站点。
+
+```ini
+TONGZHOU_DEPLOYMENT=server
+TONGZHOU_PUBLIC_ORIGIN=http://服务器IP:18082
+TONGZHOU_ALLOW_HTTP_INTERNAL_TEST=1
+TONGZHOU_HTTP_TEST_ALLOWED_IPS=127.0.0.1,团队公网IP1,团队公网IP2
+```
+
+同时配置独立 `TONGZHOU_PASSWORD_HASH`、`TONGZHOU_AUTH_SECRET`。这是受登录密码和来源 IP 限制的 **HTTP 内测**，不是 HTTPS；登录页明确标注未加密，不复用 SSH 密码。HTTP 模式默认关闭，未显式开启、无有效 IP 白名单或端口低于 1024 时启动失败；未登录 API 返回 401。Nginx 保留 Host 中的端口并覆盖转发来源地址；不要把应用直接绑定公网，也不要省略 `deny all`。
+
+公网放行前先在服务器经 Nginx 验证登录、会话、上传、导出和 Host/Origin 校验；放行后再从实际团队网络验证浏览器全流程。办公出口变动时须更新三处白名单。
+
+## 可选 SSH 私有入口
 
 使用 [private-access](private-access/README.md) 中的 Mac / Windows 启动器：连接后访问本机 <http://127.0.0.1:14318>，经 SSH 加密隧道访问服务器应用。文件不包含密码或 API Key。Mac 已做真实连接测试，Windows 启动器仍待实机验收。
 

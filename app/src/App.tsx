@@ -44,7 +44,7 @@ import type {
   Material,
   Job,
 } from "./types";
-import { api, bytes, date, active } from "./api";
+import { api, bytes, date, active, manualRowId } from "./api";
 import {
   Requirements,
   Materials,
@@ -292,7 +292,7 @@ export function App() {
     setEditing({
       kind: "materials",
       row: {
-        id: "manual-" + crypto.randomUUID().slice(0, 8),
+        id: manualRowId(),
         name: "",
         spec: "",
         material: "",
