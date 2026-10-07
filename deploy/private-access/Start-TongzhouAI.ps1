@@ -17,12 +17,12 @@ try {
     if (-not (Test-Path -LiteralPath $knownHosts)) { throw 'Keep ssh-known-hosts next to this script.' }
     Write-Host 'Tongzhou AI: enter the server SSH password. Input will not be echoed.'
     # Keep SSH attached to this console for its normal password prompt.
-    $sshArgs = @('-F', 'NUL', '-N', '-o', ('"UserKnownHostsFile=' + $knownHosts + '"'),
+    $sshArgs = @('-F', 'NUL', '-N', '-o', 'UserKnownHostsFile=ssh-known-hosts',
         '-o', 'StrictHostKeyChecking=yes', '-o', 'HostKeyAlgorithms=ssh-ed25519',
         '-o', 'ExitOnForwardFailure=yes', '-o', 'ConnectTimeout=15',
         '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=3',
         '-L', '127.0.0.1:14318:127.0.0.1:4318', 'root@36.140.247.61')
-    $sshProcess = Start-Process -FilePath $ssh.Source -ArgumentList $sshArgs -NoNewWindow -PassThru
+    $sshProcess = Start-Process -FilePath $ssh.Source -ArgumentList $sshArgs -WorkingDirectory $PSScriptRoot -NoNewWindow -PassThru
     $deadline = (Get-Date).AddMinutes(3)
     $ready = $false
     while (-not $sshProcess.HasExited -and (Get-Date) -lt $deadline) {

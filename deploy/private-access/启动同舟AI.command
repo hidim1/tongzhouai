@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")"
-HERE="$PWD"
 STATE="$HOME/Library/Caches/TongzhouAI-SSH"
 SOCKET="$STATE/tunnel.sock"
 TARGET="root@36.140.247.61"
@@ -23,7 +22,7 @@ if ! /usr/bin/ssh -F /dev/null -S "$SOCKET" -O check "$TARGET" >/dev/null 2>&1; 
   fi
   printf '同舟 AI · 云端私有工作区\n请输入服务器 SSH 密码（输入时不显示字符）。\n'
   /usr/bin/ssh -F /dev/null -M -S "$SOCKET" -f -N \
-    -o "UserKnownHostsFile=$HERE/ssh-known-hosts" \
+    -o UserKnownHostsFile=ssh-known-hosts \
     -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
     -o ExitOnForwardFailure=yes -o ConnectTimeout=15 \
     -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
