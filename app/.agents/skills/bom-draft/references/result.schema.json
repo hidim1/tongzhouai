@@ -70,15 +70,18 @@
           },
           "name": {
             "type": "string",
-            "maxLength": 18000
+            "maxLength": 18000,
+            "description": "设备或物料名称，例如手动球阀、离心泵；不是材质。"
           },
           "spec": {
             "type": "string",
-            "maxLength": 18000
+            "maxLength": 18000,
+            "description": "原文明确给出的型号、规格或额定参数，例如 DN25；未知为空字符串。"
           },
           "material": {
             "type": "string",
-            "maxLength": 18000
+            "maxLength": 18000,
+            "description": "材质或材料牌号，例如 316L、304、PTFE；不是设备或物料名称。只采用原文明确的材质，未知为空字符串。"
           },
           "unit": {
             "type": "string",
@@ -97,11 +100,13 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "原文明确的数量；未提供则 null，不能根据出现次数推断。"
           },
           "tag": {
             "type": "string",
-            "maxLength": 18000
+            "maxLength": 18000,
+            "description": "原始工艺位号，例如 V-101；未提供为空字符串。"
           },
           "price": {
             "anyOf": [
@@ -112,7 +117,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "有有效报价来源的单价；未提供则 null，不能填 0 或估价。"
           },
           "status": {
             "type": "string",

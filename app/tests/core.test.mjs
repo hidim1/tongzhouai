@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { derive, draftSections } from "../server/intake.mjs";
-import { resultSchema, material } from "../server/schema.mjs";
+import { resultSchema, material, jsonSchema } from "../server/schema.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT } from "../server/config.mjs";
@@ -86,13 +86,14 @@ test("all five native skills have entrypoint and output schema", () => {
       fs.readFileSync(path.join(dir, "SKILL.md"), "utf8"),
       new RegExp("name: " + name),
     );
-    assert.ok(
+    assert.deepEqual(
       JSON.parse(
         fs.readFileSync(
           path.join(dir, "references/result.schema.json"),
           "utf8",
         ),
-      ).properties,
+      ),
+      jsonSchema,
     );
   }
 });

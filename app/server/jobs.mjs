@@ -15,6 +15,7 @@ import {
 } from "./store.mjs";
 import { derive, draftSections } from "./intake.mjs";
 import { resultSchema, jsonSchema } from "./schema.mjs";
+import { syncBundledSkills } from "./skills.mjs";
 import {
   assistantInstructions,
   isIdentityQuestion,
@@ -264,18 +265,7 @@ async function runLive(job) {
   const cwd = projectDir(p.id);
   const localSkills = path.join(cwd, ".agents");
   fs.mkdirSync(localSkills, { recursive: true });
-  // Electron's fs.cpSync cannot recursively copy virtual ASAR directories.
-  // readFile/writeFile keeps the skill deployment portable and repairs partial copies.
-  function copyMissing(source, destination) {
-    fs.mkdirSync(destination, { recursive: true });
-    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-      const src = path.join(source, entry.name),
-        dst = path.join(destination, entry.name);
-      if (entry.isDirectory()) copyMissing(src, dst);
-      else if (!fs.existsSync(dst)) fs.writeFileSync(dst, fs.readFileSync(src));
-    }
-  }
-  copyMissing(
+  syncBundledSkills(
     path.join(ROOT, ".agents/skills"),
     path.join(localSkills, "skills"),
   );
