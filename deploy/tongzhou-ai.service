@@ -1,0 +1,26 @@
+[Unit]
+Description=Tongzhou AI engineering workspace
+After=network-online.target tongzhou-proxy.service
+Wants=network-online.target tongzhou-proxy.service
+
+[Service]
+Type=simple
+User=tongzhou-ai
+Group=tongzhou-ai
+WorkingDirectory=/opt/tongzhou-ai/current/app
+EnvironmentFile=/etc/tongzhou-ai.env
+ExecStart=/opt/tongzhou-runtime/node/bin/node server/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tongzhou-ai
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

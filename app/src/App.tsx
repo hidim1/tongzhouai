@@ -467,6 +467,13 @@ export function App() {
             </strong>
           </div>
           <div className="topbar-right">
+            {data.cloud && (
+              <form method="post" action="/logout">
+                <button className="btn" type="submit">
+                  退出登录
+                </button>
+              </form>
+            )}
             <div className="mode-switch">
               <button
                 className={mode === "live" ? "selected" : ""}

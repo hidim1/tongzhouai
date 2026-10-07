@@ -15,6 +15,8 @@ export async function api<T>(
     try {
       message = (await res.json()).error || message;
     } catch {}
+    if (res.status === 401 && message === "请先登录同舟 AI 工作区")
+      window.location.assign("/login");
     throw new Error(message);
   }
   return res.json();

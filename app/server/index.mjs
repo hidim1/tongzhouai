@@ -28,6 +28,7 @@ import { requirement, material, issue, section } from "./schema.mjs";
 import { renderCad } from "./cad.mjs";
 import { diagnostics } from "./platform.mjs";
 import { timingSafeEqual } from "node:crypto";
+import { createAccessGuard } from "./access.mjs";
 import {
   initializeProvider,
   providerStatus,
@@ -42,18 +43,14 @@ const app = express();
 const port = Number(process.env.PORT || 4318);
 let providerChanging = false;
 app.disable("x-powered-by");
+if (process.env.TONGZHOU_PUBLIC_ORIGIN) app.set("trust proxy", "loopback");
+app.use(createAccessGuard());
 const sessionToken = process.env.TONGZHOU_SESSION_TOKEN;
 const equal = (a, b) =>
   typeof a === "string" &&
   Buffer.byteLength(a) === Buffer.byteLength(b) &&
   timingSafeEqual(Buffer.from(a), Buffer.from(b));
 app.use((req, res, next) => {
-  const host = req.get("host") || "";
-  if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
-    return res.status(403).end("Local only");
-  const origin = req.get("origin");
-  if (origin && origin !== `http://${host}`)
-    return res.status(403).end("Invalid origin");
   if (sessionToken) {
     const supplied = req.get("X-Tongzhou-Session");
     const cookie = (req.get("cookie") || "")
@@ -77,9 +74,6 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: "2mb" }));
 app.use("/api", (req, res, next) => {
-  const host = req.headers.host || "";
-  if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host))
-    return res.status(403).json({ error: "仅允许本机访问" });
   if (
     !["GET", "HEAD"].includes(req.method) &&
     req.get("X-Tongzhou-Client") !== "workspace"
@@ -103,6 +97,7 @@ const getJob = (id) => {
 };
 app.get("/api/bootstrap", (req, res) =>
   res.json({
+    cloud: !!process.env.TONGZHOU_PUBLIC_ORIGIN,
     brand: store.brand,
     projects: store.projects.map(cleanProject),
     jobs: store.jobs,

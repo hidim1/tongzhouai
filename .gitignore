@@ -10,6 +10,7 @@ reference_materials/
 .DS_Store
 vendor/
 app/docs/screenshots/
+app/docs/protocol/
 .env
 .env.*
 !.env.example

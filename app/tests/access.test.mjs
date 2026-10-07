@@ -1,0 +1,142 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import express from "express";
+import http from "node:http";
+import { once } from "node:events";
+import { createAccessGuard, hashPassword } from "../server/access.mjs";
+
+// Native fetch can normalize/ignore Host. Use raw HTTP to exercise rebinding.
+const requestRaw = (url, options = {}) =>
+  new Promise((resolve, reject) => {
+    const req = http.request(url, options, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () =>
+        resolve(
+          new Response(Buffer.concat(chunks), {
+            status: res.statusCode,
+            headers: Object.fromEntries(
+              Object.entries(res.headers).map(([k, v]) => [k, String(v)]),
+            ),
+          }),
+        ),
+      );
+    });
+    req.on("error", reject);
+    req.end(options.body?.toString());
+  });
+
+test("public workspace requires HTTPS, signed login, same origin, and expires sessions", async () => {
+  const password = "test-workspace-passphrase";
+  const passwordHash = await hashPassword(password);
+  const sessionSecret = "a".repeat(64);
+  let time = Date.now();
+  const options = {
+    origin: "https://workspace.example",
+    passwordHash,
+    sessionSecret,
+    now: () => time,
+  };
+  assert.throws(() =>
+    createAccessGuard({ ...options, origin: "http://workspace.example" }),
+  );
+  assert.throws(() =>
+    createAccessGuard({ ...options, sessionSecret: "short" }),
+  );
+  const app = express();
+  app.use(createAccessGuard(options));
+  app.use((_req, res) => res.json({ protected: true }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = (url, o = {}) =>
+    requestRaw(base + url, {
+      ...o,
+      redirect: "manual",
+      headers: { Host: "workspace.example", ...o.headers },
+    });
+  const login = (value = password) =>
+    request("/login", {
+      method: "POST",
+      headers: {
+        Origin: options.origin,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ password: value }),
+    });
+  try {
+    assert.equal((await request("/")).status, 303);
+    assert.equal((await request("/api/bootstrap")).status, 401);
+    assert.equal(
+      (await request("/", { headers: { Host: "attacker.example" } })).status,
+      403,
+    );
+    assert.equal((await request("/login", { method: "POST" })).status, 403);
+    assert.match(await (await request("/login")).text(), /工作区访问密码/);
+    assert.equal((await login("wrong-test-password")).status, 401);
+    const authenticated = await login();
+    assert.equal(authenticated.status, 303);
+    const header = authenticated.headers.get("set-cookie");
+    assert.match(header, /HttpOnly; Secure; SameSite=Strict/);
+    const cookie = header.split(";")[0];
+    assert.equal(
+      (await request("/api/bootstrap", { headers: { Cookie: cookie } })).status,
+      200,
+    );
+    assert.equal(
+      (await request("/api/bootstrap", { headers: { Cookie: cookie + "a" } }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (
+        await request("/api/bootstrap", {
+          headers: { Cookie: cookie, Origin: "https://evil.example" },
+        })
+      ).status,
+      403,
+    );
+    const logout = await request("/logout", {
+      method: "POST",
+      headers: { Cookie: cookie, Origin: options.origin },
+    });
+    assert.match(logout.headers.get("set-cookie"), /Max-Age=0/);
+    time += 13 * 60 * 60 * 1000;
+    assert.equal(
+      (await request("/api/bootstrap", { headers: { Cookie: cookie } })).status,
+      401,
+    );
+    for (let i = 0; i < 6; i++)
+      assert.equal((await login("wrong-test-password")).status, 401);
+    assert.equal((await login()).status, 429);
+    time += 16 * 60 * 1000;
+    assert.equal((await login()).status, 303);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("local-only access remains the default", async () => {
+  const app = express();
+  app.use(createAccessGuard({ origin: "" }));
+  app.use((_req, res) => res.send("local"));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await requestRaw(base)).status, 200);
+    assert.equal(
+      (await requestRaw(base, { headers: { Host: "public.example" } })).status,
+      403,
+    );
+    assert.equal(
+      (await requestRaw(base, { headers: { Origin: "https://evil.example" } }))
+        .status,
+      403,
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

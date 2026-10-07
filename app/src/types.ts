@@ -128,6 +128,7 @@ export type Engine = {
   error?: string;
 };
 export type Bootstrap = {
+  cloud?: boolean;
   sessions: Session[];
   brand: string;
   projects: Project[];
