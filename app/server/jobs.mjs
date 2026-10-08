@@ -196,7 +196,7 @@ async function runDemo(job) {
   if (job.conversationOnly) {
     completeData(job, {
       summary:
-        "我是同舟 AI，同舟纵横的工程智能助手。当前是本地演示模式，不调用云端模型；真实模式由 Codex 执行工程 Skills，并连接配置的模型 API。",
+        "我是舟知，同舟纵横的工程智能助手。当前是本地演示模式，不调用云端模型；真实模式由 Codex 执行工程 Skills，并连接配置的模型 API。",
       requirements: [],
       materials: [],
       issues: [],

@@ -15,7 +15,7 @@ try {
     if (Test-LocalPort) { throw 'Local port 14318 is already in use. No existing process was stopped.' }
     $knownHosts = Join-Path $PSScriptRoot 'ssh-known-hosts'
     if (-not (Test-Path -LiteralPath $knownHosts)) { throw 'Keep ssh-known-hosts next to this script.' }
-    Write-Host 'Tongzhou AI: enter the server SSH password. Input will not be echoed.'
+    Write-Host 'Zhouzhi: enter the server SSH password. Input will not be echoed.'
     # Keep SSH attached to this console for its normal password prompt.
     $sshArgs = @('-F', 'NUL', '-N', '-o', 'UserKnownHostsFile=ssh-known-hosts',
         '-o', 'StrictHostKeyChecking=yes', '-o', 'HostKeyAlgorithms=ssh-ed25519',

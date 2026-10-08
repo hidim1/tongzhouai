@@ -63,7 +63,7 @@ app.use((req, res, next) => {
         `tz_session=${sessionToken}; HttpOnly; SameSite=Strict; Path=/`,
       );
     else if (!equal(cookie, sessionToken))
-      return res.status(401).json({ error: "请从同舟 AI 桌面应用访问" });
+      return res.status(401).json({ error: "请从舟知桌面应用访问" });
   }
   if (!process.argv.includes("--dev"))
     res.set(
@@ -414,7 +414,7 @@ app.use((err, req, res, next) => {
 });
 const server = app.listen(port, "127.0.0.1", () => {
   const actual = server.address().port;
-  console.log(`Tongzhou AI: http://127.0.0.1:${actual}`);
+  console.log(`Zhouzhi: http://127.0.0.1:${actual}`);
   process.parentPort?.postMessage({ type: "ready", port: actual });
 });
 if (!process.env.TONGZHOU_NO_AUTO_CONNECT)

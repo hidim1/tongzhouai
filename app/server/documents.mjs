@@ -111,7 +111,7 @@ export async function extractDocument(file) {
 }
 export async function writeXlsx(target, project, mode, result) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "同舟 AI";
+  wb.creator = "舟知";
   const sheet = wb.addWorksheet("材料清单");
   const widths = [7, 24, 28, 16, 9, 18, 10, 16, 18, 14, 48, 62];
   sheet.columns = widths.map((width) => ({ width }));
@@ -285,7 +285,7 @@ export async function writeDocx(target, project, mode, result) {
     ),
   );
   const doc = new Document({
-    creator: "同舟 AI",
+    creator: "舟知",
     styles: {
       default: {
         document: {
@@ -313,7 +313,7 @@ export async function writeDocx(target, project, mode, result) {
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: "同舟 AI · 工程师审核稿    ",
+                    text: "舟知 · 工程师审核稿    ",
                     font,
                     size: 18,
                   }),

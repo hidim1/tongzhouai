@@ -1,6 +1,6 @@
 ---
 name: bid-draft
-description: 技术标编制。用于同舟 AI 工程投标项目的 bid-draft 任务，输出带来源的结构化分析。
+description: 技术标编制。用于舟知 工程投标项目的 bid-draft 任务，输出带来源的结构化分析。
 ---
 
 # 技术标编制

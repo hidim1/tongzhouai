@@ -1,6 +1,6 @@
 ---
 name: consistency-review
-description: 一致性审查。用于同舟 AI 工程投标项目的 consistency-review 任务，输出带来源的结构化分析。
+description: 一致性审查。用于舟知 工程投标项目的 consistency-review 任务，输出带来源的结构化分析。
 ---
 
 # 一致性审查

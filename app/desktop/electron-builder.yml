@@ -1,9 +1,9 @@
 appId: cn.tongzhou.engineering.ai
-productName: 同舟 AI
-copyright: 同舟 AI 工程工作台
+productName: 舟知
+copyright: 舟知工程工作台
 asar: true
 npmRebuild: false
-artifactName: Tongzhou-AI-${version}-${os}-${arch}.${ext}
+artifactName: Zhouzhi-${version}-${os}-${arch}.${ext}
 directories:
   output: release
   buildResources: desktop/assets
@@ -32,7 +32,7 @@ mac:
   identity: null
   hardenedRuntime: true
   extendInfo:
-    CFBundleDisplayName: 同舟 AI
+    CFBundleDisplayName: 舟知
 win:
   target:
     - target: nsis
@@ -46,5 +46,5 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   deleteAppDataOnUninstall: false
-  shortcutName: 同舟 AI
+  shortcutName: 舟知
   installerLanguages: [zh_CN, en_US]

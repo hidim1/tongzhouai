@@ -247,7 +247,7 @@ export function App() {
       setSessionId(j.sessionId);
       setToast(
         mode === "live"
-          ? "同舟 AI 正在处理，结果将在会话中返回。"
+          ? "舟知正在处理，结果将在会话中返回。"
           : "正在运行演示流程。",
       );
     });
@@ -316,7 +316,7 @@ export function App() {
           src="/brand/crossflow-logo.png"
           alt="CROSSFLOW 同舟纵横"
         />
-        <h2>同舟 AI</h2>
+        <h2>舟知</h2>
         <p>{error || "正在打开工程工作区…"}</p>
         {error ? (
           <button className="btn primary" onClick={() => void refresh()}>
@@ -1102,7 +1102,7 @@ export function App() {
                 <div className="settings-card muted">
                   <h2>关于此版本</h2>
                   <p>
-                    同舟 AI MVP 0.2.2 · 独立工程桌面工作台，通过官方 Codex
+                    舟知 MVP 0.2.3 · 独立工程桌面工作台，通过官方 Codex
                     app-server 连接模型与
                     Skills。支持持续会话、结果采纳与工程成果导出。
                   </p>
@@ -1331,7 +1331,7 @@ function Overview({
       </div>
       <div className="section-label">
         <h3>开始一个专业任务</h3>
-        <span>同舟 AI · 工程智能工作台</span>
+        <span>舟知 · 工程智能工作台</span>
       </div>
       <div className="action-cards">
         {tasks.map((t) => (

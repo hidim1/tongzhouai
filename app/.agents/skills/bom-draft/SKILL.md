@@ -1,6 +1,6 @@
 ---
 name: bom-draft
-description: 材料清单整理。用于同舟 AI 工程投标项目的 bom-draft 任务，输出带来源的结构化分析。
+description: 材料清单整理。用于舟知 工程投标项目的 bom-draft 任务，输出带来源的结构化分析。
 ---
 
 # 材料清单整理

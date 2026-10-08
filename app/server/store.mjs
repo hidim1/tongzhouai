@@ -2,14 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DATA } from "./config.mjs";
-import { migrateProjectBranding } from "./branding.mjs";
+import { PRODUCT_NAME, migrateProjectBranding, migrateWorkspaceBranding } from "./branding.mjs";
 fs.mkdirSync(DATA, { recursive: true });
 const dbPath = path.join(DATA, "workspace.json");
 export const store = fs.existsSync(dbPath)
   ? JSON.parse(fs.readFileSync(dbPath, "utf8"))
-  : { version: 1, projects: [], jobs: [], brand: "同舟 AI" };
-// Migrate the previous default spelling, but keep intentional custom names.
-if (store.brand === "同州 AI") store.brand = "同舟 AI";
+  : { version: 1, projects: [], jobs: [], brand: PRODUCT_NAME };
+const brandChanged = migrateWorkspaceBranding(store);
 store.sessions ||= [];
 for (const job of store.jobs) {
   if (!job.sessionId) {
@@ -38,7 +37,8 @@ export function save() {
   fs.writeFileSync(temp, JSON.stringify(store, null, 2));
   fs.renameSync(temp, dbPath);
 }
-if (migrateProjectBranding(store.projects)) save();
+const projectBrandingChanged = migrateProjectBranding(store.projects);
+if (brandChanged || projectBrandingChanged) save();
 export const uid = (prefix = "id") => prefix + "-" + randomUUID().slice(0, 8);
 export const timestamp = () => new Date().toISOString();
 export function getProject(id) {

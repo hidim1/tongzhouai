@@ -22,7 +22,7 @@ if ! /usr/bin/ssh -F /dev/null -S "$SOCKET" -O check "$TARGET" >/dev/null 2>&1; 
   if /usr/sbin/lsof -nP -iTCP:14318 -sTCP:LISTEN >/dev/null 2>&1; then
     fail "本机端口 14318 已被占用；未连接，也不会关闭占用它的其他程序。"
   fi
-  printf '同舟 AI · 云端私有工作区\n请输入服务器 SSH 密码（输入时不显示字符）。\n'
+  printf '舟知 · 云端私有工作区\n请输入服务器 SSH 密码（输入时不显示字符）。\n'
   /usr/bin/ssh -F /dev/null -M -S "$SOCKET" -f -N \
     -o UserKnownHostsFile=ssh-known-hosts \
     -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
@@ -39,7 +39,7 @@ for attempt in {1..15}; do
   fi
   sleep 1
 done
-[ "$ready" = 1 ] || fail "SSH 已连接，但同舟 AI 服务未响应。请检查服务器 tongzhou-ai 服务。"
+[ "$ready" = 1 ] || fail "SSH 已连接，但舟知服务未响应。请检查服务器 tongzhou-ai 服务。"
 printf '\n已连接：%s\n流量通过 SSH 加密，项目保存在服务器。\n' "$URL"
 if [ "${TONGZHOU_NO_BROWSER:-0}" != 1 ]; then
   /usr/bin/open "$URL"

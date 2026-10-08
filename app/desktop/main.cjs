@@ -17,7 +17,7 @@ let child,
   origin;
 const token = crypto.randomBytes(32).toString("hex");
 // Keep the legacy internal identity so existing user data and macOS safeStorage keys remain readable.
-// Window titles, menu labels, bundle display name and About panel use 同舟 AI.
+// Window titles, menu labels, bundle display name and About panel use 舟知.
 app.setName("同州 AI");
 if (process.env.TONGZHOU_DESKTOP_USER_DATA)
   app.setPath("userData", path.resolve(process.env.TONGZHOU_DESKTOP_USER_DATA));
@@ -35,7 +35,7 @@ else {
     .whenReady()
     .then(start)
     .catch((e) => {
-      dialog.showErrorBox("同舟 AI 启动失败", e.message);
+      dialog.showErrorBox("舟知启动失败", e.message);
       app.quit();
     });
 }
@@ -52,7 +52,7 @@ function safeExternal(url) {
   } catch {}
 }
 async function start() {
-  app.setAboutPanelOptions({ applicationName: "同舟 AI" });
+  app.setAboutPanelOptions({ applicationName: "舟知" });
   const root = path.resolve(__dirname, "..");
   const data = path.join(app.getPath("userData"), "workspace");
   fs.mkdirSync(data, { recursive: true });
@@ -61,7 +61,7 @@ async function start() {
     { flags: "a" },
   );
   log.write(
-    `\n${new Date().toISOString()} 同舟 AI ${app.getVersion()} ${process.platform}/${process.arch}\n`,
+    `\n${new Date().toISOString()} 舟知 ${app.getVersion()} ${process.platform}/${process.arch}\n`,
   );
   child = utilityProcess.fork(path.join(root, "server/index.mjs"), [], {
     cwd: app.getPath("userData"),
@@ -81,7 +81,7 @@ async function start() {
           ),
     },
     stdio: "pipe",
-    serviceName: "同舟 AI 工程引擎",
+    serviceName: "舟知工程引擎",
   });
   child.stdout?.on("data", (b) => log.write(b));
   child.stderr?.on("data", (b) => log.write(b));
@@ -128,7 +128,7 @@ async function start() {
       height: 960,
       minWidth: 920,
       minHeight: 680,
-      title: "同舟 AI",
+      title: "舟知",
       backgroundColor: "#f8faf9",
       webPreferences: {
         nodeIntegration: false,
@@ -177,7 +177,7 @@ async function start() {
     );
     window.webContents.session.on("will-download", (_event, item) => {
       item.setSaveDialogOptions({
-        title: "保存同舟 AI 成果",
+        title: "保存舟知成果",
         defaultPath: path.join(
           app.getPath("downloads"),
           path.basename(item.getFilename()),
@@ -193,7 +193,7 @@ async function start() {
     ...(process.platform === "darwin"
       ? [
           {
-            label: "同舟 AI",
+            label: "舟知",
             submenu: [
               { role: "about" },
               { type: "separator" },

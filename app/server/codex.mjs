@@ -70,7 +70,7 @@ export class CodexAdapter extends EventEmitter {
     });
     this.process.stderr.on("data", () => {});
     await this.request("initialize", {
-      clientInfo: { name: "tongzhou_ai", title: "同舟 AI", version: "0.2.2" },
+      clientInfo: { name: "tongzhou_ai", title: "舟知", version: "0.2.3" },
     }).catch((e) => {
       throw new Error("初始化连接失败：" + e.message);
     });

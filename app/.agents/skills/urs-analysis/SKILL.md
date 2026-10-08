@@ -1,6 +1,6 @@
 ---
 name: urs-analysis
-description: 招标需求解析。用于同舟 AI 工程投标项目的 urs-analysis 任务，输出带来源的结构化分析。
+description: 招标需求解析。用于舟知 工程投标项目的 urs-analysis 任务，输出带来源的结构化分析。
 ---
 
 # 招标需求解析

@@ -1,6 +1,6 @@
 {
   "name": "tongzhou-ai",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -44,8 +44,8 @@
     "vite": "^8.3.3"
   },
   "main": "desktop/main.cjs",
-  "description": "同舟 AI · Codex 驱动的工程投标工作台",
-  "author": "同舟 AI",
+  "description": "舟知 · Codex 驱动的工程投标工作台",
+  "author": "舟知",
   "overrides": {
     "exceljs": {
       "uuid": "11.1.1"

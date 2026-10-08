@@ -1,6 +1,6 @@
 # Ubuntu 服务端部署
 
-同舟 AI 的服务端部署仍使用 **Codex app-server + 原生 Skills**，不是只发布静态前端。
+舟知的服务端部署使用 **Codex app-server + 原生 Skills**。内部 `tongzhou-ai` 服务名、目录和环境变量保留以兼容既有数据。
 
 ## 布局与运行边界
 

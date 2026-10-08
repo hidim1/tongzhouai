@@ -1,4 +1,4 @@
-# 同舟 AI · SSH 私有内测入口
+# 舟知 · SSH 私有内测入口
 
 这是可选的 **SSH-only 模式**启动器，要求服务器 `TONGZHOU_PUBLIC_ORIGIN` 为空。服务器切换到 18082 直连内测后，不再用这套旧入口；当前方式与放行状态见上级目录 `ACCEPTANCE.md`。
 

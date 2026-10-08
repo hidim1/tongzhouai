@@ -90,7 +90,7 @@ export function Conversation({
         <div>
           <strong>{session?.name || "新会话"}</strong>
           <small>
-            {mode === "live" ? "同舟 AI · 工程助手" : "本地演示 · 不调用模型"}
+            {mode === "live" ? "舟知 · 工程助手" : "本地演示 · 不调用模型"}
             {session?.model ? ` · ${session.model}` : ""}
           </small>
         </div>
@@ -153,7 +153,7 @@ export function Conversation({
             <div className="assistant-message">
               <div className="assistant-label">
                 <Sparkles size={15} />
-                <strong>同舟 AI</strong>
+                <strong>舟知</strong>
                 <span>{j.title}</span>
                 {active(j.status) && <Loader2 size={13} className="spin" />}
               </div>
@@ -286,7 +286,7 @@ export function Conversation({
         }}
       >
         <textarea
-          aria-label="向同舟 AI 发送消息"
+          aria-label="向舟知发送消息"
           placeholder="描述任务，或继续追问…"
           value={message}
           onChange={(e) => setMessage(e.target.value)}

@@ -122,7 +122,7 @@ export async function diagnostics() {
   return {
     platform: process.platform,
     arch: process.arch,
-    version: "0.2.2",
+    version: "0.2.3",
     desktop: !!process.env.TONGZHOU_DESKTOP,
     checks,
   };

@@ -1,5 +1,5 @@
 [Unit]
-Description=Tongzhou AI engineering workspace
+Description=Zhouzhi engineering workspace
 After=network-online.target tongzhou-proxy.service
 Wants=network-online.target tongzhou-proxy.service
 

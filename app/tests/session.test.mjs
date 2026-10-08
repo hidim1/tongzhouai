@@ -74,7 +74,7 @@ test("native session resume, image input, adoption and isolation", async (t) => 
                 p.input.some((i) => i.text?.startsWith("本轮仅是助手身份"))
                   ? {
                       ...empty,
-                      summary: "我是同舟 AI，同舟纵横的工程智能助手。",
+                      summary: "我是舟知，同舟纵横的工程智能助手。",
                     }
                   : {
                       ...empty,
@@ -144,7 +144,7 @@ test("native session resume, image input, adoption and isolation", async (t) => 
   ))
     assert.match(
       c.p.developerInstructions,
-      /我是同舟 AI，同舟纵横的工程智能助手/,
+      /我是舟知，同舟纵横的工程智能助手/,
     );
   applyProposal(next);
   assert.equal(p.results.live.sections[0].content, "人工确认");
@@ -176,7 +176,7 @@ test("native session resume, image input, adoption and isolation", async (t) => 
   assert.equal(identityUpdates[0].p.items[0].role, "developer");
   assert.match(
     identityUpdates[0].p.items[0].content[0].text,
-    /当前生效的同舟 AI/,
+    /当前生效的舟知/,
   );
   assert.ok(s.identityRevision);
   const demoBeforeIntro = structuredClone(p.results.demo);
@@ -184,7 +184,7 @@ test("native session resume, image input, adoption and isolation", async (t) => 
     startJob(p.id, "consistency-review", "demo", "你是谁？").id,
   );
   assert.equal(demoIntro.conversationOnly, true);
-  assert.match(demoIntro.proposal.summary, /我是同舟 AI/);
+  assert.match(demoIntro.proposal.summary, /我是舟知/);
   assert.match(demoIntro.proposal.summary, /本地演示模式/);
   assert.deepEqual(p.results.demo, demoBeforeIntro);
   assert.throws(
