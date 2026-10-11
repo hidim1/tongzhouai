@@ -21,7 +21,7 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
    assert.match(p.input[0].text,/final_answer/);
    requests.push(p);
    const files=p.outputSchema.properties.files;
-   const response=files?{answer:'已整理完成。',files:[{title:'资料整理',format:'md',body:'公开资料整理测试。',columns:[],rows:[],presentation:null}]}:{answer:'同舟纵横的公司介绍正文直接在这里阅读。\n这是对话答案，不是附件。'};
+   const response=files?{answer:'已整理完成。',files:[{title:'资料整理',format:'md',body:'公开资料整理测试。',columns:[],rows:[],presentation:null}],sources:[]}:{answer:'同舟纵横的公司介绍正文直接在这里阅读。\n这是对话答案，不是附件。',sources:[{title:'模拟公开来源',url:'https://example.com/company',date:'2026-10-11'}]};
    setTimeout(()=>{
     previewAI.emit('event',{method:'item/started',params:{threadId:p.threadId,item:{type:'webSearch'}}});
     const db=JSON.parse(fs.readFileSync(path.join(dir,'preview/preview.json'),'utf8'));phases.push(db.jobs.at(-1).phase);
@@ -40,7 +40,11 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  const chat=await post(`/preview/sessions/${s.id}/tasks`,{message:'给我一个同舟纵横公司的整体介绍'});
  for(let i=0;i<100;i++){state=await(await fetch(base+'/api/preview/state')).json();job=state.jobs.find(x=>x.id===chat.id);if(job.status!=='running')break;await new Promise(r=>setTimeout(r,10));}
  assert.equal(job.status,'completed',job.error);assert.equal(job.files.length,0);assert.match(job.answer,/公司介绍正文/);
- assert.deepEqual(Object.keys(requests.at(-1).outputSchema.properties),['answer']);
+ assert.deepEqual(Object.keys(requests.at(-1).outputSchema.properties),['answer','sources']);
+ assert.equal(job.searchReferences,undefined);assert.equal(job.sources,undefined);
+ assert.doesNotMatch(JSON.stringify(state.sessions),/example\.com\/company/);
+ const stored=JSON.parse(fs.readFileSync(path.join(dir,'preview/preview.json'),'utf8'));
+ assert.equal(stored.jobs.find(x=>x.id===chat.id).searchReferences[0].url,'https://example.com/company');
  assert.match(requests.at(-1).input[0].text,/本轮为日常对话/);
  assert.doesNotMatch(requests.at(-1).input[0].text,/design\.rationale/);
  assert.equal(fs.readdirSync(path.join(dir,'preview/outputs')).length,1);
@@ -50,6 +54,8 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  assert.equal(job.status,'completed',job.error);assert.equal(job.files.length,1);
  assert.deepEqual(requests.at(-1).outputSchema.properties.files.items.properties.format.enum,['md']);
  assert.match(requests.at(-1).input[0].text,/公司介绍正文直接在这里阅读/);
+ assert.match(requests.at(-1).input[0].text,/当前会话后台参考/);
+ assert.match(requests.at(-1).input[0].text,/example\.com\/company/);
  for(const thread of threads){
   assert.match(thread.developerInstructions,/像一位可靠、懂业务、好沟通的同事/);
   assert.match(thread.developerInstructions,/承接当前会话/);

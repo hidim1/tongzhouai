@@ -15,7 +15,7 @@ function fixture(t,options={}){
  const originals={connect:previewAI.connect,request:previewAI.request,interrupt:previewAI.interrupt};
  const threadId='completion-'+(++seq),turnId='turn-'+seq,calls=[],phases=[];
  previewAI.connect=async()=>{previewAI.status.authenticated=true;};
- previewAI.request=async(method,params)=>{calls.push({method,params});if(method==='thread/start')return{thread:{id:threadId}};if(method==='turn/start'){if(options.startReply)await options.startReply;return{turn:{id:turnId}};}if(method==='turn/steer')return{turnId};throw Error(method);};
+ previewAI.request=async(method,params)=>{calls.push({method,params});if(method==='thread/start')return{thread:{id:threadId}};if(method==='turn/start'){if(options.startReply)await options.startReply;if(options.results){const index=calls.filter(c=>c.method==='turn/start').length-1;setImmediate(()=>{previewAI.emit('event',{method:'item/completed',params:{threadId,turnId,item:{type:'agentMessage',phase:'final_answer',text:JSON.stringify(options.results[index])}}});});}return{turn:{id:turnId}};}if(method==='turn/steer')return{turnId};throw Error(method);};
  previewAI.interrupt=async(...params)=>{calls.push({method:'interrupt',params});};
  t.after(()=>Object.assign(previewAI,originals));
  const start=(overrides={})=>askAI('test-'+seq,'整理资料',generalSchema,[],undefined,'medium',{timeoutMs:0,completeOnFinal:true,onPhase:phase=>phases.push(phase),...overrides});
@@ -55,7 +55,21 @@ test('无phase空回复只纠正一次，不交付也不终止尚未完成的检
  f.item(valid,'commentary');assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,2);f.item();await result;f.complete('completed');
 });
 test('正式结果结构无效不得交付',async t=>{
- const f=fixture(t);const result=f.start();const rejected=assert.rejects(result,/结构化结果/);await flush();f.item({answer:'不完整'});await rejected;
+ const f=fixture(t,{results:[{answer:42,files:[]},{answer:42,files:[]}]});
+ await assert.rejects(f.start(),/答复格式/);assert.equal(f.calls.filter(c=>c.method==='turn/start').length,2);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,2);
+});
+test('有效正文附带来源不失败，来源通过内部回调接收而非对话输出',async t=>{
+ const f=fixture(t);let sources;
+ const result=f.start({onReferences:value=>sources=value});await flush();
+ f.item({...valid,sources:[{title:'公开参考',url:'https://example.com/reference',date:'2026-10-11'}]});
+ assert.deepEqual(await result,valid);assert.equal(sources[0].publishedAt,'2026-10-11');assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);f.complete('completed');
+});
+test('无效格式只纠正一次，保留原任务，不重复联网和生成附件',async t=>{
+ const f=fixture(t,{results:[{answer:42},valid]});
+ assert.deepEqual(await f.start({allowWebSearch:true}),valid);
+ const threads=f.calls.filter(c=>c.method==='thread/start'),turns=f.calls.filter(c=>c.method==='turn/start');
+ assert.equal(threads.length,2);assert.equal(threads[0].params.config.web_search,'live');assert.equal(threads[1].params.config.web_search,'disabled');
+ assert.match(turns[1].params.input[0].text,/不要重复联网/);assert.match(turns[1].params.input[0].text,/上一轮结果/);f.complete('completed');
 });
 test('未完成任务仍可手动停止，并忽略迟到结果',async t=>{
  const f=fixture(t);const result=f.start();const rejected=assert.rejects(result,/已停止任务/);await flush();await cancelAI('test-'+seq);await rejected;f.item();f.complete('completed');

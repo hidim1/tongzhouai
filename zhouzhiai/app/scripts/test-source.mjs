@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 const app=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'zhouzhi-source-test-'));
 try{
-  const tests=fs.readdirSync(path.join(app,'tests')).filter(name=>name.endsWith('.test.mjs')).sort().map(name=>'tests/'+name);
+  const tests=fs.readdirSync(path.join(app,'tests')).filter(name=>!name.startsWith('.')&&name.endsWith('.test.mjs')).sort().map(name=>'tests/'+name);
   const result=spawnSync(process.execPath,['--test',...tests],{cwd:app,stdio:'inherit',env:{...process.env,TONGZHOU_DATA_DIR:scratch,ZHOUZHI_MEMBRANE_DATA:path.join(app,'tests/fixtures/membrane')}});
   if(result.error)throw result.error;
   process.exitCode=result.status??1;

@@ -4,9 +4,13 @@ import {createServer} from 'vite';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {load} from 'cheerio';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 test('没有方案版本也显示预算与成果步骤，操作禁用；有版本恢复正常内容',async()=>{
- const vite=await createServer({server:{middlewareMode:true,hmr:false},appType:'custom'});
+ const cacheDir=fs.mkdtempSync(path.join(os.tmpdir(),'zhouzhi-empty-steps-vite-'));
+ const vite=await createServer({configLoader:'runner',cacheDir,server:{middlewareMode:true,hmr:false},appType:'custom'});
  try{
   const {MembraneWorkspace}=await vite.ssrLoadModule('/src/MembraneWorkspace.tsx');
   const base={project:{id:'empty-project',name:'空项目',files:[]},boot:{engine:{connected:false,authenticated:false},jobs:[]},state:{versions:[],jobs:[],images:[]},busy:false,perform:()=>{},onUpload:()=>{},onCreate:()=>{}};
@@ -30,5 +34,5 @@ test('没有方案版本也显示预算与成果步骤，操作禁用；有版�
   const generatedPage=load(generated);
   assert.equal(generatedPage('button').filter((_,el)=>generatedPage(el).text()==='生成效果图').length,1);
   assert.ok(!generated.includes('可能计费'));
- }finally{await vite.close();}
+ }finally{await vite.close();fs.rmSync(cacheDir,{recursive:true,force:true});}
 });

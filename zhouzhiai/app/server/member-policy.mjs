@@ -19,7 +19,7 @@ export function publicPayload(value,key=''){
   if(Array.isArray(value))return value.map(v=>publicPayload(v,key));
   if(value&&typeof value==='object'){
     const result={};for(const [k,v] of Object.entries(value)){
-      if(/^(model|defaultModel|requestedModel|provider|providerIdentity|baseUrl|apiKey|credentialStorage|accountType|threadId|identityRevision|path|preview|cwd|runtime|skills)$/i.test(k))continue;
+      if(/^(model|defaultModel|requestedModel|provider|providerIdentity|baseUrl|apiKey|credentialStorage|accountType|threadId|identityRevision|path|preview|cwd|runtime|skills|searchReferences)$/i.test(k))continue;
       if(k==='engine'){result.engine={connected:!!v?.connected,authenticated:!!v?.authenticated};continue;}
       result[k]=publicPayload(v,k);
     }return result;
