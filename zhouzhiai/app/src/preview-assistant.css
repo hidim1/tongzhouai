@@ -1,0 +1,171 @@
+/* One reading column; keep engineering and settings layouts independent. */
+.zh-assistant-page {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #fbfcfd;
+}
+.zh-assistant-page .zh-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.zh-assistant-page .zh-topbar {
+  height: 56px;
+  flex: none;
+}
+.zh-assistant-page .zh-heading,
+.zh-assistant-page .zh-assistant-layout,
+.zh-assistant-page .zh-footer {
+  width: calc(100% - 80px);
+  max-width: 1040px;
+  margin-inline: auto;
+}
+.zh-assistant-page .zh-heading {
+  padding: 22px 0 16px;
+  flex: none;
+}
+.zh-assistant-page .zh-heading h1 {
+  font-size: 25px;
+  margin: 6px 0 0;
+  letter-spacing: 0;
+}
+.zh-assistant-page .zh-eyebrow {
+  font-size: 9px;
+  color: #8ba1ad;
+  letter-spacing: 1.7px;
+}
+.zh-assistant-page .zh-assistant-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+}
+.zh-assistant-page .zh-chat {
+  flex: 1;
+  min-height: 0;
+}
+.zh-assistant-page .zh-chat-header {
+  height: 48px;
+  padding: 0 4px;
+  flex: none;
+  border-block: 1px solid #e4edf1;
+}
+.zh-assistant-page .zh-chat-header > svg { flex: none; }
+.zh-assistant-page .zh-chat-header b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.zh-assistant-page .zh-chat-header button { flex: none; }
+.zh-assistant-page .zh-messages {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  padding: 18px 4px;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.zh-assistant-page .zh-message {
+  max-width: 100%;
+  margin: 0 0 18px;
+  padding: 17px 20px;
+  border: 1px solid #e5edf1;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 1.85;
+}
+.zh-assistant-page .zh-message.user {
+  max-width: 86%;
+  margin-left: auto;
+  border-color: #ddeff0;
+  background: #eaf5f6;
+}
+.zh-assistant-page .zh-message > small { margin-bottom: 7px; }
+.zh-assistant-page .zh-file-download {
+  padding: 13px 15px;
+  margin-top: 12px;
+  gap: 12px;
+  border-color: #dce8ee;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.zh-assistant-page .zh-file-download > svg { flex: none; }
+.zh-assistant-page .zh-file-download > span { min-width: 0; }
+.zh-assistant-page .zh-composer {
+  flex: none;
+  margin: 10px 0 0;
+  padding: 16px 18px 13px;
+  border-color: #cedfe5;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px #224f4908;
+}
+.zh-assistant-page .zh-composer:focus-within {
+  border-color: #8fc7d6;
+  box-shadow: 0 0 0 3px #008eb40a;
+}
+.zh-assistant-page .zh-composer textarea {
+  min-height: 62px;
+  height: 62px;
+  resize: none;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.zh-assistant-page .zh-composer textarea:focus {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+.zh-assistant-page .zh-composer > div { gap: 12px; }
+.zh-assistant-page .zh-footer {
+  padding: 10px 2px 12px;
+  flex: none;
+  color: #91a4af;
+}
+.zh-assistant-page .zh-attachmentbar,
+.zh-assistant-page .zh-error,
+.zh-assistant-page .zh-taskbar {
+  width: calc(100% - 80px);
+  max-width: 1040px;
+  margin: 12px auto 0;
+  flex: none;
+}
+.zh-assistant-page .zh-attachmentbar {
+  max-height: 78px;
+  overflow: auto;
+}
+.zh-assistant-page .zh-welcome {
+  max-width: 600px;
+  margin: 28px auto;
+}
+.zh-assistant-page .zh-suggestions { margin-top: 20px; }
+@media (max-width: 1100px) {
+  .zh-assistant-page .zh-heading,
+  .zh-assistant-page .zh-assistant-layout,
+  .zh-assistant-page .zh-footer,
+  .zh-assistant-page .zh-attachmentbar,
+  .zh-assistant-page .zh-error,
+  .zh-assistant-page .zh-taskbar { width: calc(100% - 40px); }
+}
+@media (max-width: 760px) {
+  .zh-assistant-page { height: auto; min-height: 100dvh; overflow: visible; }
+  .zh-assistant-page .zh-heading,
+  .zh-assistant-page .zh-assistant-layout,
+  .zh-assistant-page .zh-footer,
+  .zh-assistant-page .zh-attachmentbar,
+  .zh-assistant-page .zh-error,
+  .zh-assistant-page .zh-taskbar { width: calc(100% - 30px); }
+  .zh-assistant-page .zh-heading { padding: 20px 0 16px; }
+  .zh-assistant-page .zh-heading h1 { font-size: 21px; }
+  .zh-assistant-page .zh-topbar { height: 48px; }
+  .zh-assistant-page .zh-chat-header { gap: 7px; }
+  .zh-assistant-page .zh-messages { flex: none; height: 390px; padding-block: 16px; }
+  .zh-assistant-page .zh-message { padding: 13px 14px; font-size: 13px; }
+  .zh-assistant-page .zh-message.user { max-width: 94%; }
+  .zh-assistant-page .zh-composer { padding: 13px; }
+  .zh-assistant-page .zh-composer > div > span { display: none; }
+  .zh-assistant-page .zh-welcome { margin: 15px 4px; }
+}

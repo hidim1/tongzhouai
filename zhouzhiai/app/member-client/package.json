@@ -1,0 +1,10 @@
+{
+  "name":"zhouzhi-member-client",
+  "version":"1.0.0",
+  "private":true,
+  "packageManager":"traversal@1.0.0",
+  "main":"main.cjs",
+  "description":"舟知 · 全量工作助手",
+  "author":"同舟纵横",
+  "license":"UNLICENSED"
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew Tongzhou HTTPS IP certificate
+After=network-online.target tongzhou-proxy.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HTTPS_PROXY=http://127.0.0.1:17890
+Environment=HTTP_PROXY=http://127.0.0.1:17890
+ExecStart=/opt/tongzhou-runtime/certbot/bin/certbot renew --quiet --no-random-sleep-on-renew --deploy-hook "/usr/sbin/nginx -t && /bin/systemctl reload nginx"

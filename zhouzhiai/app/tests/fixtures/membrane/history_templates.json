@@ -1,0 +1,24 @@
+[
+  {
+    "template_id": "SYNTHETIC-TEST-ONLY",
+    "project_name": "虚构测试样机（非业务资料）",
+    "route_tags": ["超滤"],
+    "bom": {"rows": [
+      {"name":"测试组件组","level":"1","code":"TEST-GROUP","property":"自制","specification":"虚构测试规格","material":"测试材质","unit":"套","quantity":1},
+      {"name":"测试泵","level":"1.1","code":"TEST-PUMP","property":"外购","specification":"测试泵规格","material":"测试材质","unit":"台","quantity":1},
+      {"name":"测试膜芯","level":"1.2","code":"TEST-MEMBRANE","property":"外购","specification":"测试膜芯规格","material":"测试材质","unit":"支","quantity":2},
+      {"name":"测试仪表","level":"1.3","code":"TEST-INSTRUMENT","property":"外购","specification":"测试仪表规格","material":"测试材质","unit":"台","quantity":1},
+      {"name":"测试电控","level":"1.4","code":"TEST-CONTROL","property":"外购","specification":"测试电控规格","material":"测试材质","unit":"套","quantity":1},
+      {"name":"测试阀","level":"1.5","code":"TEST-VALVE","property":"外购","specification":"测试阀规格","material":"测试材质","unit":"个","quantity":3}
+    ]}
+  },
+  {
+    "template_id": "CF20260326GA",
+    "project_name": "虚构超滤测试模块（仅沿用原测试标识，不含真实项目数据）",
+    "route_tags": ["超滤"],
+    "bom": {"rows": [
+      {"name":"测试超滤模块","level":"1","code":"TEST-UF-GROUP","property":"自制","specification":"虚构","material":"测试材质","unit":"套","quantity":1},
+      {"name":"测试超滤子件","level":"1.1","code":"TEST-UF-CHILD","property":"外购","specification":"虚构","material":"测试材质","unit":"支","quantity":1}
+    ]}
+  }
+]

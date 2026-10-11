@@ -1,0 +1,36 @@
+appId: cn.crossflow.zhouzhi.member
+productName: 舟知
+copyright: 同舟纵横
+asar: true
+npmRebuild: false
+electronVersion: 44.7.0
+artifactName: Zhouzhi-V1.0-Windows-x64-Setup.${ext}
+directories:
+  app: .
+  output: ../member-release
+  buildResources: .
+files:
+  - main.cjs
+  - preload.cjs
+  - credentials.cjs
+  - package.json
+  - icon.png
+  - '!node_modules/**/*'
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: icon.ico
+  signAndEditExecutable: false
+nsis:
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  shortcutName: 舟知
+  installerLanguages: [zh_CN, en_US]
+  displayLanguageSelector: false
