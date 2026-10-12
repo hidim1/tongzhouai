@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 payload = json.load(sys.stdin)
-if payload['action'] in ('image', 'image-check'):
+if payload['action'] in ('image', 'image-check', 'presentation-image'):
     # Credentials remain server-side. No source .env is modified or copied to the frontend.
     from concept_images import ImageJobs, load_config, build_prompt
     config = load_config()
@@ -32,7 +32,14 @@ if payload['action'] in ('image', 'image-check'):
         raise ValueError('没有配置生图服务密钥')
     reference = payload.get('reference')
     try:
-        raw, url = jobs._request_image(build_prompt(payload['description']), reference=reference)
+        if payload['action'] == 'presentation-image':
+            description = str(payload.get('description', ''))[:4000]
+            if not description.strip():
+                raise ValueError('配图描述为空')
+            prompt = 'Create a high quality editorial illustration for a presentation. No text, numbers, logos, watermarks or fabricated evidence. This is a conceptual illustration, not a photograph of real products or facilities. Respect the requested composition and empty space.\n' + description
+        else:
+            prompt = build_prompt(payload['description'])
+        raw, url = jobs._request_image(prompt, reference=reference)
     except Exception as error:
         raise ValueError(str(error).replace(config['IMAGE_API_KEY'], '[已隐藏]')) from None
     target = Path(payload['target'])

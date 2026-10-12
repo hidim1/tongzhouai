@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import {Copy,Check} from 'lucide-react';
 import {assistantTableColumns} from './assistant-table';
 import {SoftScrollArea} from './SoftScrollArea';
+import {chineseStrong} from '../shared/markdown.mjs';
 
 function AssistantTable({children,node}:{children?:React.ReactNode;node?:Parameters<typeof assistantTableColumns>[0]}){
   const columns=assistantTableColumns(node),total=columns.reduce((sum,c)=>sum+c.idealWidth,0),minWidth=columns.reduce((sum,c)=>sum+c.minWidth,0);
@@ -23,7 +24,7 @@ export function AssistantText({text}:{text:string}){
     }}catch{}
     setCopyError(!ok);setCopied(ok);if(ok)setTimeout(()=>setCopied(false),2000);
   }
-  return <><div className="zh-answer-body" ref={body}><Markdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeChatUrl} components={{
+  return <><div className="zh-answer-body" ref={body}><Markdown remarkPlugins={[remarkGfm,chineseStrong]} skipHtml urlTransform={safeChatUrl} components={{
     a:({href,children})=>href?<a href={href} target="_blank" rel="noopener noreferrer">{children}</a>:<span>{children}</span>,
     img:({alt})=><span className="zh-image-alt">{alt||'图片'}</span>,
     table:AssistantTable,

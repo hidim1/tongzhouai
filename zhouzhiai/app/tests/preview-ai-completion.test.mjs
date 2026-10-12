@@ -9,6 +9,7 @@ const {askAI,previewAI,generalSchema,cancelAI,steerAI}=await import('../server/p
 const {matchesOutputSchema}=await import('../server/preview-result.mjs');
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const valid={answer:'已完成资料整理。',files:[]};
+const reviewSchema={type:'object',properties:{acceptable:{type:'boolean'},problems:{type:'array',items:{type:'string'}},repairs:{type:'array',items:{type:'string'}}},required:['acceptable','problems','repairs'],additionalProperties:false};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 let seq=0;
 function fixture(t,options={}){
@@ -30,6 +31,11 @@ test('通用任务超过八分钟仍继续等待，正式结果无需等缺失�
  t.mock.timers.tick(480001);await flush();assert.equal(settled,false);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
  f.item();assert.deepEqual(await result,valid);f.complete('completed');t.mock.timers.tick(5001);
  assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
+});
+test('内部视觉检查没有answer字段也可正式交付，不触发聊天格式纠正',async t=>{
+ const f=fixture(t),result=askAI('test-'+seq,'核对排版',reviewSchema,[],undefined,'low',{timeoutMs:0,completeOnFinal:true});await flush();
+ const value={acceptable:true,problems:[],repairs:[]};f.item({...value,sources:[]});assert.deepEqual(await result,value);f.complete('completed');
+ assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,0);
 });
 test('中间进度和未完整JSON不提前交付，完整commentary触发一次正式提交修复',async t=>{
  const f=fixture(t);let settled=false;const result=f.start().then(v=>{settled=true;return v;});await flush();

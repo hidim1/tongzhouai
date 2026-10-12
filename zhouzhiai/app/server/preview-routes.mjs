@@ -3,7 +3,6 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import multer from 'multer';
 import ExcelJS from 'exceljs';
-import { Document, Packer, Paragraph, HeadingLevel } from 'docx';
 import { DATA, ROOT, PYTHON, SERVER } from './config.mjs';
 import { store, getProject, projectDir, uid, save as saveWorkspace } from './store.mjs';
 import { ingest } from './intake.mjs';
@@ -18,6 +17,9 @@ import { archiveItem, restoreItem } from './preview-archive.mjs';
 import { installWorkflow } from './preview-workflow-routes.mjs';
 import { directionContext, filesSnapshot, detailedBudget, invalidateBudget, versionChanged } from './preview-workflow.mjs';
 import {assertPublicOutput} from './member-policy.mjs';
+import {makeDocument,makeMarkdown} from './preview-document.mjs';
+import {makeWorkbook} from './preview-workbook.mjs';
+import {reviewPresentation,repairPresentationLayout} from './preview-presentation-review.mjs';
 
 const dir = path.join(DATA,'preview');
 fs.mkdirSync(dir,{recursive:true});
@@ -39,24 +41,24 @@ const cleanFile = ({path:_,text, ...f})=>({...f,textPreview:(text||'').slice(0,2
 const upload = multer({dest:path.join(dir,'uploads'),limits:{fileSize:30*1024*1024,files:12},fileFilter:(req,file,cb)=>cb(null,/\.(docx?|xlsx|pdf|txt|md|csv|png|jpe?g|dwg|dxf|step|stp|iges|igs|sldprt|sldasm)$/i.test(file.originalname))});
 const known3D = name => /\.(step|stp|iges|igs|sldprt|sldasm)$/i.test(name);
 const safe = str => String(str||'输出').replace(/[\/\\:*?"<>|\x00-\x1f]/g,'_').slice(0,80);
-async function artifact(title,format,body,columns=[],rows=[],scope='通用输出',presentation=null,extraSheets=[]) {
-  assertPublicOutput({title,body,columns,rows,scope,presentation,extraSheets});
+async function artifact(title,format,body,columns=[],rows=[],scope='通用输出',presentation=null,extraSheets=[],options={}) {
+  assertPublicOutput({title,body,columns,rows,scope,presentation,extraSheets,workbook:options.workbook});
   const id=uid('output'), out=path.join(dir,'outputs');fs.mkdirSync(out,{recursive:true});
   const filename=safe(title).replace(/\.(xlsx|docx|md|pptx)$/i,'')+'.'+format, target=path.join(out,id+'.'+format);
   if(format==='pptx') {
-    try{await makePresentation(presentation,target,path.join(dir,'presentation-build',id));}catch(e){console.error('PPT:',e.message);throw new Error(e.code==='PRESENTATION_VALIDATION_FAILED'?'PPT排版校验未通过，文件未交付。请要求精简单页内容、合理分页后重试。':e.message);}
+    const buildDir=path.join(dir,'presentation-build',id),settings={...options,root:ROOT,allowGenerated:process.env.ZHOUZHI_PRESENTATION_IMAGES!=='0',generateImage:payload=>runBridge(payload,720000),...(options.jobId?{review:({plan,previews})=>reviewPresentation(plan,previews,{askAI,id:options.jobId,cancelled:options.cancelled})}:{})};
+    try{
+      try{await makePresentation(presentation,target,buildDir,settings);}catch(e){
+       if(!options.jobId||presentation?.slides?.[0]?.layout!=='canvas'||!e.revisedPresentation&&!/PPT构图需要调整|PPT文字区域不足|PPT文字对比不足|PPT表格行距不足|PPT表格文字与页面背景/.test(e.message))throw e;
+       const fixed=e.revisedPresentation||await repairPresentationLayout(presentation,e.message,{askAI,id:options.jobId,cancelled:options.cancelled});assertPublicOutput(fixed);
+       await makePresentation(fixed,target,buildDir,settings);
+      }
+    }catch(e){console.error('PPT:',e.message);throw new Error(e.code==='PRESENTATION_VALIDATION_FAILED'?'PPT排版校验未通过，文件未交付。请要求合理分页或调整构图后重试。':e.message);}
   } else if(format==='xlsx') {
-    const wb=new ExcelJS.Workbook();const sheet=wb.addWorksheet('工作清单');
-    sheet.addRow(columns.length?columns:['内容']);for(const row of rows)sheet.addRow(row.map(c=>String(c)));
-    sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0E4860'}};
-    sheet.columns.forEach(c=>c.width=26);sheet.views=[{state:'frozen',ySplit:1}];
-    for(const page of extraSheets){const tab=wb.addWorksheet(page.name);tab.addRow(page.columns);for(const row of page.rows)tab.addRow(row);tab.getRow(1).font={bold:true};tab.columns.forEach(c=>c.width=26);tab.views=[{state:'frozen',ySplit:1}];}
-    const notes=wb.addWorksheet('编制说明');notes.addRow([scope]);for(const line of body.split('\n'))notes.addRow([line]);notes.getColumn(1).width=110;
-    await wb.xlsx.writeFile(target);
+    await makeWorkbook(title,body,columns,rows,target,{extraSheets,plan:options.workbook,engineering:scope!=='通用输出'});
   } else if(format==='docx') {
-    const doc=new Document({sections:[{children:[new Paragraph({text:title,heading:HeadingLevel.TITLE}),new Paragraph(scope),...body.split('\n').map(text=>new Paragraph(text))]}]});
-    fs.writeFileSync(target,await Packer.toBuffer(doc));
-  } else if(format==='md') fs.writeFileSync(target,`# ${title}\n\n${scope}\n\n${body}`);
+    await makeDocument(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
+  } else if(format==='md') await makeMarkdown(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
   else throw new Error('不支持该输出格式');
   return {id,name:filename,path:target,url:'/api/preview/outputs/'+id};
 }

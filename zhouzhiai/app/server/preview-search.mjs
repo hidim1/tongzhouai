@@ -42,7 +42,7 @@ export function assistantResult(text,schema,guard){
   if(!schema.properties.files&&Array.isArray(value.files)&&value.files.length===0)allowed.add('files');
   if(Object.keys(value).some(key=>!allowed.has(key)))throw formatError();
   const output=Object.fromEntries(Object.keys(schema.properties).filter(key=>Object.hasOwn(value,key)).map(key=>[key,value[key]]));
-  if(!matchesOutputSchema(output,schema)||typeof output.answer!=='string'||!output.answer.trim())throw formatError();
+  if(!matchesOutputSchema(output,schema)||Object.hasOwn(schema.properties,'answer')&&(typeof output.answer!=='string'||!output.answer.trim()))throw formatError();
   return {output:guard(output),sources:normalizeSources(value.sources??value.references)};
 }
 export function formatError(){return Object.assign(new Error('答复格式未能整理完成，请重试'),{code:'AI_RESULT_FORMAT'});}

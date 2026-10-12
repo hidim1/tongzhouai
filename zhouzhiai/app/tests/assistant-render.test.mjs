@@ -18,6 +18,8 @@ test('自然段落、列表、加粗和表格安全渲染，不执行HTML或加�
   assert.equal(page('colgroup col').length,2);assert.equal(page('.zh-answer-table').attr('tabindex'),'0');assert.match(page('table').attr('style'),/min-width:/);
   assert.equal(page('a[href="https://example.com/article"]').attr('rel'),'noopener noreferrer');
   assert.equal(page('script,iframe,img').length,0);assert.ok(!html.includes('javascript:'));assert.ok(!html.includes('tracker.png'));
+  const repaired=load(renderToStaticMarkup(React.createElement(AssistantText,{text:'**这份排名不够严谨，我撤回把同舟排第一的结论。**你质疑得对，抱歉。\n\n结论：**候选名单。**这些材料不足以支持排名。'})));
+  assert.equal(repaired('strong').length,2);assert.doesNotMatch(repaired('.zh-answer-body').text(),/\*\*/);
   assert.equal(safeChatUrl('data:text/html,test'),'');assert.equal(safeChatUrl('https://name:secret@example.com/'),'');assert.equal(safeChatUrl('/api/private'),'');
   const view=fs.readFileSync(new URL('../src/Preview.tsx',import.meta.url),'utf8');
   assert.match(view,/思考中…/);assert.match(view,/composerAction/);assert.match(view,/onCompositionStart/);assert.match(view,/sending.current/);
