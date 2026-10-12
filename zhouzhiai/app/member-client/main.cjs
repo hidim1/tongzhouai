@@ -6,6 +6,7 @@ const {randomBytes}=require('node:crypto');
 const origin='http://36.140.247.61:18082';
 let window;
 app.setName('舟知');
+if(process.platform==='win32')app.setAppUserModelId('cn.crossflow.zhouzhi.member');
 if(!app.requestSingleInstanceLock())app.quit();
 else{
  app.on('second-instance',()=>{if(window){window.restore();window.show();window.focus();}});

@@ -4,6 +4,7 @@ import {MembraneWorkspace} from './MembraneWorkspace';
 import {AssistantText} from './AssistantText';
 import {AssistantQueue} from './AssistantQueue';
 import {AssistantControls} from './AssistantControls';
+import {SoftScrollArea} from './SoftScrollArea';
 import {composerAction,elapsedLabel} from './assistant-input';
 import './preview.css';
 import './preview-assistant.css';
@@ -60,7 +61,7 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
  {nav==='membrane'&&assemblyRunning&&<div className="zh-taskbar"><RefreshCw className="zh-spin" size={15}/><span>AI任务执行中，较长工程清单需要几分钟。</span><button disabled={busy} onClick={()=>void perform(()=>request(`/preview/jobs/${assemblyJobs.find((j:any)=>j.status==='running').id}/cancel`,{}))}>停止当前任务</button></div>}
  {nav==='members'&&boot.role==='admin'&&boot.adminMembersEnabled&&MembersView?<MembersView/>:nav==='settings'&&boot.role!=='member'&&PreviewSettings?<PreviewSettings server={boot.server} engine={boot.engine} running={anyRunning} onChanged={refresh}/>:nav==='assistant'?<><div className="zh-heading"><div><h1>把日常工作，交给舟知搭把手。</h1></div>{boot.engine.connected&&boot.engine.authenticated&&<span className="mw-ai ready" role="status"><Sparkles size={15}/>AI 已连接</span>}</div>
   <div className="zh-assistant-layout"><section className="zh-chat"><div className="zh-chat-header"><Bot size={18}/><b>{session?.name||'新工作对话'}</b><button className="zh-link" onClick={()=>void perform(newSession)}><Plus size={16}/>新对话</button></div>
-  <div className="zh-messages" onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.scrollTop-el.clientHeight<100;}}>
+  <SoftScrollArea className="zh-messages" tabIndex={0} aria-label="工作对话内容" onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.scrollTop-el.clientHeight<100;}}>
    {!session?.messages.length?<div className="zh-welcome"><div className="zh-ai-symbol"><Sparkles size={32}/></div><h2>你说任务，我来整理。</h2><p>从一个问题、一份资料、一张表开始。</p><div className="zh-suggestions">{['帮我理一理这件事，给点建议','提炼这份资料的重点','把这些内容做成 PPT'].map(t=><button key={t} onClick={()=>setText(t)}>{t}<ArrowUp size={16}/></button>)}</div></div>:session.messages.map((m:any,i:number)=><article className={'zh-message '+m.role} key={i}>
     <small>{m.role==='user'?'我':'舟知'}{m.delivery==='steer'&&<span className="zh-steer-receipt"> · 已补充到本轮</span>}</small>
     {m.role==='assistant'?<AssistantText text={m.text}/>:<div className="zh-user-text">{m.text}</div>}
@@ -68,7 +69,7 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
    </article>)}
    {generalRunning&&<div className="zh-waiting"><small>舟知</small><div><span className="zh-wait-status" role="status"><span className="zh-thinking-dots" aria-hidden="true"><i/><i/><i/></span>思考中…</span><span className="zh-wait-time">{generalProgress}</span></div></div>}
    {generalJobs.filter((j:any)=>j.status!=='queued').slice(-1).filter((j:any)=>j.status==='failed').map((j:any)=><div className="zh-inline-error" key={j.id}>上次执行未成功：{j.error}</div>)}<div ref={bottom}/>
-  </div>
+  </SoftScrollArea>
   <AssistantQueue items={queuedMessages} running={generalRunning} busy={busy} onEdit={(id:string,message:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{message},'PATCH'))} onRemove={(id:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{},'DELETE'))} onResume={()=>perform(()=>request(`/preview/sessions/${sessionId}/queue/resume`,{}))}/>
   <div className="zh-composer"><textarea aria-label="通用工作任务" aria-describedby="zh-composer-hint" placeholder="说说你想处理的事，或上传资料…" value={text} maxLength={12000} onChange={e=>{setText(e.target.value);setNotice({sessionId:'',text:''});}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;compositionEnded.current=Date.now();}} onKeyDown={e=>{
    const action=composerAction({...e,keyCode:e.nativeEvent.keyCode,isComposing:e.nativeEvent.isComposing},generalRunning,composing.current||Date.now()-compositionEnded.current<80);

@@ -3,10 +3,11 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {Copy,Check} from 'lucide-react';
 import {assistantTableColumns} from './assistant-table';
+import {SoftScrollArea} from './SoftScrollArea';
 
 function AssistantTable({children,node}:{children?:React.ReactNode;node?:Parameters<typeof assistantTableColumns>[0]}){
   const columns=assistantTableColumns(node),total=columns.reduce((sum,c)=>sum+c.idealWidth,0),minWidth=columns.reduce((sum,c)=>sum+c.minWidth,0);
-  return <div className="zh-answer-table" tabIndex={0} role="region" aria-label="回答表格，可横向滚动"><table style={{minWidth}}><colgroup>{columns.map((c,i)=><col key={i} style={{width:`${c.idealWidth/total*100}%`,minWidth:c.minWidth}}/>)}</colgroup>{children}</table></div>;
+  return <SoftScrollArea className="zh-answer-table" edgeHints tabIndex={0} role="region" aria-label="回答表格，可横向滚动"><table style={{minWidth}}><colgroup>{columns.map((c,i)=><col key={i} style={{width:`${c.idealWidth/total*100}%`,minWidth:c.minWidth}}/>)}</colgroup>{children}</table></SoftScrollArea>;
 }
 
 export function safeChatUrl(value:string){

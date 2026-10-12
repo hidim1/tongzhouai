@@ -2,6 +2,7 @@ appId: cn.crossflow.zhouzhi.member
 productName: 舟知
 copyright: 同舟纵横
 asar: true
+afterPack: after-pack.cjs
 npmRebuild: false
 electronVersion: 44.7.0
 artifactName: Zhouzhi-V1.0-Windows-x64-Setup.${ext}

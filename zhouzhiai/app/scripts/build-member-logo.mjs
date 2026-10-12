@@ -30,6 +30,7 @@ fs.writeFileSync(path.join(output,'icon.ico'),ico);
 fs.copyFileSync(source,path.join(output,'同舟图标.png'));
 const unpacked=path.join(output,'win-unpacked');
 fs.cpSync(path.join(root,'member-release/win-unpacked'),unpacked,{recursive:true});
+fs.writeFileSync(path.join(unpacked,'zhouzhi-crossflow-v1.ico'),ico);
 const appDir=path.join(scratch,'app');fs.mkdirSync(appDir);
 for(const name of ['main.cjs','preload.cjs','credentials.cjs','package.json','icon.png'])fs.copyFileSync(path.join(root,'member-client',name),path.join(appDir,name));
 await asar.createPackage(appDir,path.join(unpacked,'resources/app.asar'));
@@ -54,7 +55,7 @@ const cache=path.join(os.homedir(),'Library/Caches/electron-builder');
 const nsisParent=fs.readdirSync(cache).find(n=>n.startsWith('nsis-3.'));
 if(!nsisParent)throw Error('缺少已安装的NSIS编译器');
 const bundle=fs.readdirSync(path.join(cache,nsisParent)).find(n=>fs.existsSync(path.join(cache,nsisParent,n,'mac/makensis')));
-const makensis=path.join(cache,nsisParent,bundle,'mac/makensis');
+const makensis=process.env.ZHOUZHI_MAKENSIS||path.join(cache,nsisParent,bundle,'mac/makensis');
 if(process.argv.includes('--prepare-only')){console.log(JSON.stringify({output,clientIconVerified:true,asarFiles:packed,preparedOnly:true}));process.exit(0);}
 execFileSync(makensis,['installer.nsi'],{cwd:output,stdio:'inherit'});
 const setup=path.join(output,'Zhouzhi-V1.0-Windows-x64-Setup.exe');

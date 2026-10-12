@@ -7,6 +7,10 @@ const require=createRequire(import.meta.url),builder=createRequire(require.resol
 const ResEdit=arb('resedit'),asar=arb('@electron/asar');
 const dir=path.resolve(process.argv[2]),root=path.resolve(import.meta.dirname,'..'),setup=path.join(dir,'Zhouzhi-V1.0-Windows-x64-Setup.exe');
 const logo=fs.readFileSync(path.join(root,'public/brand/app-icon.png'));
+const installedIcon=path.join(dir,'win-unpacked/zhouzhi-crossflow-v1.ico');
+assert.deepEqual(fs.readFileSync(installedIcon),fs.readFileSync(path.join(root,'member-client/icon.ico')));
+const installer=fs.readFileSync(path.join(dir,'installer.nsi'),'utf8');
+assert.match(installer,/CreateShortCut "\$DESKTOP\\舟知.lnk"[^\n]+zhouzhi-crossflow-v1.ico/);
 for(const filename of [setup,path.join(dir,'win-unpacked/舟知.exe')]){
  const exe=ResEdit.NtExecutable.from(fs.readFileSync(filename)),res=ResEdit.NtExecutableResource.from(exe);
  assert.ok(res.entries.some(e=>e.type===3&&Buffer.from(e.bin).equals(logo)),filename+' 必须包含同舟图标');

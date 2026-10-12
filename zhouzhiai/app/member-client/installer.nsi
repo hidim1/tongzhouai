@@ -33,14 +33,15 @@ Section "舟知"
   File /r "win-unpacked/*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\舟知"
-  CreateShortCut "$DESKTOP\舟知.lnk" "$INSTDIR\舟知.exe"
-  CreateShortCut "$SMPROGRAMS\舟知\舟知.lnk" "$INSTDIR\舟知.exe"
-  CreateShortCut "$SMPROGRAMS\舟知\卸载舟知.lnk" "$INSTDIR\Uninstall.exe"
+  ; An explicit, separate company icon avoids the old Electron shortcut cache.
+  CreateShortCut "$DESKTOP\舟知.lnk" "$INSTDIR\舟知.exe" "" "$INSTDIR\zhouzhi-crossflow-v1.ico" 0
+  CreateShortCut "$SMPROGRAMS\舟知\舟知.lnk" "$INSTDIR\舟知.exe" "" "$INSTDIR\zhouzhi-crossflow-v1.ico" 0
+  CreateShortCut "$SMPROGRAMS\舟知\卸载舟知.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\zhouzhi-crossflow-v1.ico" 0
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "DisplayName" "舟知"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "DisplayVersion" "1.0.0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "Publisher" "同舟纵横"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "DisplayIcon" "$INSTDIR\舟知.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "DisplayIcon" "$INSTDIR\zhouzhi-crossflow-v1.ico,0"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZhouzhiMember" "NoRepair" 1
 SectionEnd
