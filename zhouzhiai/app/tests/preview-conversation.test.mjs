@@ -12,9 +12,10 @@ test('聊天与正式文件分开，准确性、来源、内部信息与显式�
 test('自然语气仅注入通用会话，不修改膜预算或选型提示',()=>{
  const routes=fs.readFileSync(new URL('../server/preview-routes.mjs',import.meta.url),'utf8');
  const start=routes.indexOf("app.post('/api/preview/sessions/:id/tasks'"),end=routes.indexOf("app.post('/api/preview/projects/:id/files'",start);
- assert.match(routes.slice(start,end),/assistantConversationInstructions/);
+ const assistant=fs.readFileSync(new URL('../server/preview-assistant.mjs',import.meta.url),'utf8');
+ assert.match(routes.slice(start,end),/assistant.submit/);assert.match(assistant,/assistantConversationInstructions/);
  assert.doesNotMatch(routes.slice(end),/assistantConversationInstructions/);
  const engine=fs.readFileSync(new URL('../server/preview-ai.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(engine,/assistantConversationInstructions/);
- assert.match(routes.slice(start,end),/timeoutMs:0/);
+ assert.match(assistant,/timeoutMs:0/);
 });

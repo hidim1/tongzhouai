@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zhouzhi-completion-test-'));
 process.env.TONGZHOU_DATA_DIR=dir;
-const {askAI,previewAI,generalSchema,cancelAI}=await import('../server/preview-ai.mjs');
+const {askAI,previewAI,generalSchema,cancelAI,steerAI}=await import('../server/preview-ai.mjs');
 const {matchesOutputSchema}=await import('../server/preview-result.mjs');
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const valid={answer:'已完成资料整理。',files:[]};
@@ -103,9 +103,35 @@ test('结构校验拒绝多余字段、类型错误和继承属性',()=>{
  assert.equal(matchesOutputSchema(JSON.parse('{"answer":"a","files":[],"toString":"x"}'),generalSchema),false);
 });
 test('只有智能工作助理取消固定时限，页面进度与手动停止保留',()=>{
- const routes=fs.readFileSync(new URL('../server/preview-routes.mjs',import.meta.url),'utf8');
+ const routes=fs.readFileSync(new URL('../server/preview-assistant.mjs',import.meta.url),'utf8');
  assert.equal((routes.match(/timeoutMs:0/g)||[]).length,1);
  assert.match(routes,/allowWebSearch:true,timeoutMs:0,completeOnFinal:true,onPhase:/);
  const view=fs.readFileSync(new URL('../src/Preview.tsx',import.meta.url),'utf8');
- assert.match(view,/generalProgress/);assert.match(view,/复杂任务会继续处理，可随时停止/);assert.match(view,/停止当前任务/);
+ assert.match(view,/generalProgress/);assert.match(view,/思考中…/);assert.match(view,/zh-stop/);
+});
+test('用户引导使用实际活跃回合，未交付草稿修订后才完成，结束后不假接收',async t=>{
+ const f=fixture(t);const result=f.start();await flush();
+ assert.equal(await steerAI('test-'+seq,'更简短一点'),true);
+ const call=f.calls.find(c=>c.method==='turn/steer');assert.equal(call.params.expectedTurnId,f.turnId);assert.match(call.params.input[0].text,/更简短一点/);
+ assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);f.item();await flush();await flush();
+ assert.equal(f.calls.filter(c=>c.method==='turn/start').length,2);assert.match(f.calls.filter(c=>c.method==='turn/start')[1].params.input[0].text,/更简短一点/);
+ f.item();await result;f.complete('completed');
+ assert.equal(await steerAI('test-'+seq,'来晚的补充'),false);
+});
+test('回合开始回执尚未到达时，不向未知回合发送引导',async t=>{
+ let unblock;const f=fixture(t,{startReply:new Promise(r=>unblock=r)});const result=f.start();await flush();
+ assert.equal(await steerAI('test-'+seq,'更简短'),false);assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,0);
+ unblock();await flush();f.item();await result;f.complete('completed');
+});
+test('引导确认晚于正式答复时返回未接收，不能假显示本轮已补充',async t=>{
+ const f=fixture(t),old=previewAI.request;let acknowledge;
+ previewAI.request=async(method,p)=>method==='turn/steer'?new Promise(r=>acknowledge=r):old(method,p);
+ const result=f.start();await flush();const guidance=steerAI('test-'+seq,'来晚的指导');await flush();
+ f.item();await result;acknowledge({turnId:f.turnId});assert.equal(await guidance,false);f.complete('completed');
+});
+test('一次格式纠正会保留已接受的用户引导，不重复联网',async t=>{
+ const f=fixture(t),result=f.start();await flush();await steerAI('test-'+seq,'正文只写两句话');
+ f.item({answer:42});await flush();await flush();
+ const requests=f.calls.filter(c=>c.method==='turn/start');assert.equal(requests.length,2);assert.match(requests[1].params.input[0].text,/正文只写两句话/);
+ f.item();await result;f.complete('completed');
 });

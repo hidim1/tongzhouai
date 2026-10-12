@@ -45,7 +45,7 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  assert.doesNotMatch(JSON.stringify(state.sessions),/example\.com\/company/);
  const stored=JSON.parse(fs.readFileSync(path.join(dir,'preview/preview.json'),'utf8'));
  assert.equal(stored.jobs.find(x=>x.id===chat.id).searchReferences[0].url,'https://example.com/company');
- assert.match(requests.at(-1).input[0].text,/本轮为日常对话/);
+ assert.match(threads.at(-1).developerInstructions,/本轮为日常对话/);
  assert.doesNotMatch(requests.at(-1).input[0].text,/design\.rationale/);
  assert.equal(fs.readdirSync(path.join(dir,'preview/outputs')).length,1);
  // Follow-up conversion uses the same conversation's substantive answer.

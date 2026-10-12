@@ -1,13 +1,20 @@
 import React,{useEffect,useState,useRef} from 'react';
 import {Bot,Layers3,ArrowUp,Paperclip,Plus,Sparkles,FileText,Download,Settings,RefreshCw,FolderOpen,ChevronRight,TriangleAlert,Trash2,Undo2,Users} from 'lucide-react';
 import {MembraneWorkspace} from './MembraneWorkspace';
+import {AssistantText} from './AssistantText';
+import {AssistantQueue} from './AssistantQueue';
+import {composerAction,elapsedLabel} from './assistant-input';
 import './preview.css';
 import './preview-assistant.css';
 async function request(url:string,body?:unknown,method?:string){const r=await fetch('/api'+url,{method:method||(body===undefined?'GET':'POST'),headers:body===undefined?{}:{'Content-Type':'application/json','X-Tongzhou-Client':'workspace'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===401){window.location.assign('/login');throw new Error('登录已过期');}const d=await r.json();if(!r.ok)throw new Error(d.error||'请求失败');return d;}
 async function upload(url:string,files:FileList|null){if(!files?.length)return;const body=new FormData();for(const f of Array.from(files))body.append('files',f);const r=await fetch('/api'+url,{method:'POST',headers:{'X-Tongzhou-Client':'workspace'},body});if(r.status===401){window.location.assign('/login');throw new Error('登录已过期');}const d=await r.json();if(!r.ok)throw new Error(d.error||'上传失败');return d;}
 export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
  const [nav,setNav]=useState(window.location.hash==='#members'&&MembersView?'members':'assistant'),[state,setState]=useState<any>(null),[boot,setBoot]=useState<any>(null),[sessionId,setSessionId]=useState(''),[projectId,setProjectId]=useState(''),[text,setText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[deleting,setDeleting]=useState<any>(null),[recycle,setRecycle]=useState(false),[newName,setNewName]=useState('');
- const input=useRef<HTMLInputElement>(null),bottom=useRef<HTMLDivElement>(null);
+ const input=useRef<HTMLInputElement>(null),bottom=useRef<HTMLDivElement>(null),composing=useRef(false),compositionEnded=useRef(0),sending=useRef(false),pendingSend=useRef({key:'',id:''}),follow=useRef(true),lastView=useRef(''),currentSession=useRef(sessionId);
+ currentSession.current=sessionId;
+ const [notice,setNotice]=useState({sessionId:'',text:''});
+ const [stopping,setStopping]=useState(false),stopPending=useRef(false);
+ const modifier=typeof navigator!=='undefined'&&/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
  const refresh=async()=>{const [s,b]=await Promise.all([request('/preview/state'),request('/bootstrap')]);setState(s);setBoot(b);setSessionId(id=>s.sessions.some((x:any)=>x.id===id)?id:s.sessions[0]?.id||'');setProjectId(id=>b.projects.some((p:any)=>p.id===id)?id:b.projects[0]?.id||'');};
  useEffect(()=>{void refresh().catch(e=>setError(e.message));const timer=setInterval(()=>void refresh().catch(()=>{}),2000);return()=>clearInterval(timer);},[]);
  const perform=async(fn:()=>Promise<any>)=>{setBusy(true);setError('');try{await fn();await refresh();return true;}catch(e:any){setError(e.message);return false;}finally{setBusy(false);}};
@@ -15,13 +22,27 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
  const generalJobs=state?.jobs.filter((j:any)=>j.sessionId===sessionId)||[],assemblyJobs=state?.jobs.filter((j:any)=>j.projectId===projectId)||[];
  const generalRunning=generalJobs.some((j:any)=>j.status==='running'),assemblyRunning=assemblyJobs.some((j:any)=>j.status==='running');
  const currentGeneralJob=generalJobs.find((j:any)=>j.status==='running');
- const elapsedSeconds=currentGeneralJob?Math.max(0,Math.floor((Date.now()-Date.parse(currentGeneralJob.createdAt))/1000)):0;
- const generalProgress=currentGeneralJob?`${currentGeneralJob.phase||'正在处理任务'} · 已等待 ${Math.floor(elapsedSeconds/60)}分${elapsedSeconds%60}秒`:'';
- useEffect(()=>{const panel=bottom.current?.parentElement;panel?.scrollTo({top:panel.scrollHeight,behavior:'smooth'});},[sessionId,nav,session?.messages.length,generalRunning]);
+ const generalProgress=currentGeneralJob?elapsedLabel(currentGeneralJob.startedAt||currentGeneralJob.createdAt):'';
+ const queuedMessages=generalJobs.filter((j:any)=>j.status==='queued');
+ useEffect(()=>{const panel=bottom.current?.parentElement,key=nav+sessionId;if(lastView.current!==key){follow.current=true;lastView.current=key;}if(follow.current)panel?.scrollTo({top:panel.scrollHeight,behavior:'smooth'});},[sessionId,nav,session?.messages.length,generalRunning]);
  useEffect(()=>{window.scrollTo({top:0});},[nav,projectId]);
  useEffect(()=>{if(boot&&nav==='members'&&!(boot.role==='admin'&&boot.adminMembersEnabled&&MembersView))setNav('assistant');},[boot,nav,MembersView]);
- const newSession=async()=>{const s=await request('/preview/sessions',{});setSessionId(s.id);return s;};
- const send=()=>perform(async()=>{if(!text.trim())return;const s=session||await newSession();await request(`/preview/sessions/${s.id}/tasks`,{message:text});setText('');});
+ const newSession=async()=>{const s=await request('/preview/sessions',{});currentSession.current=s.id;setSessionId(s.id);return s;};
+ const send=async(mode:'queue'|'steer'='queue')=>{
+  if(sending.current||busy||!text.trim())return;sending.current=true;const draft=text;
+  try{await perform(async()=>{
+   const s=session||await newSession(),key=JSON.stringify([s.id,mode,draft]);
+   if(pendingSend.current.key!==key)pendingSend.current={key,id:globalThis.crypto?.randomUUID?.()||`msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`};
+   const result=await request(`/preview/sessions/${s.id}/tasks`,{message:draft,mode,requestId:pendingSend.current.id});
+   setNotice({sessionId:s.id,text:result.notice||'已发送'});follow.current=true;
+   if(currentSession.current===s.id)setText(value=>value===draft?'':value);
+   pendingSend.current={key:'',id:''};
+  });}finally{sending.current=false;}
+ };
+ const stopGeneral=async()=>{
+  if(stopPending.current||!currentGeneralJob)return;stopPending.current=true;setStopping(true);
+  try{await request(`/preview/jobs/${currentGeneralJob.id}/cancel`,{});await refresh();}catch(e:any){setError(e.message);}finally{stopPending.current=false;setStopping(false);}
+ };
  const doUpload=(files:FileList|null)=>perform(async()=>{if(nav==='assistant'){const s=session||await newSession();await upload(`/preview/sessions/${s.id}/files`,files);}else await upload(`/preview/projects/${projectId}/files`,files);if(input.current)input.current.value='';});
  const anyRunning=state?.jobs.some((j:any)=>['running','queued','approval','awaiting_approval'].includes(j.status))||state?.images.some((j:any)=>j.status==='running')||boot?.jobs.some((j:any)=>['running','queued','approval','awaiting_approval'].includes(j.status));
  if(!state||!boot)return <div className="zh-loading">舟知正在准备…{error&&<p>{error}</p>}</div>;
@@ -35,11 +56,25 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
  </aside><main className="zh-main"><header className="zh-topbar"><div>工作空间<ChevronRight size={14}/><b>{nav==='members'?'成员工作区':nav==='settings'?'AI 连接设置':nav==='assistant'?'智能工作助理':'膜预算平台'}</b></div><span className="zh-pill"><i/>{boot.server ? boot.version : '仅本地运行'}</span>{boot.server&&<form method="post" action="/logout"><button className="zh-link">退出登录</button></form>}</header>
  {error&&<div className="zh-error" role="alert"><TriangleAlert size={17}/>{error}<button onClick={()=>setError('')}>×</button></div>}
  {nav==='assistant'&&session?.files.length>0&&<div className="zh-attachmentbar"><Paperclip size={14}/><span>本轮资料：</span>{session.files.map((f:any)=><span key={f.id} title={f.status}>{f.name} · {f.status}</span>)}</div>}
- {['assistant','membrane'].includes(nav)&&(nav==='assistant'?generalRunning:assemblyRunning)&&<div className="zh-taskbar"><RefreshCw className="zh-spin" size={15}/><span>{nav==='assistant'?generalProgress:'AI任务执行中，较长工程清单需要几分钟。'}</span><button disabled={busy} onClick={()=>void perform(()=>request(`/preview/jobs/${(nav==='assistant'?generalJobs:assemblyJobs).find((j:any)=>j.status==='running').id}/cancel`,{}))}>停止当前任务</button></div>}
- {nav==='members'&&boot.role==='admin'&&boot.adminMembersEnabled&&MembersView?<MembersView/>:nav==='settings'&&boot.role!=='member'&&PreviewSettings?<PreviewSettings server={boot.server} engine={boot.engine} running={anyRunning} onChanged={refresh}/>:nav==='assistant'?<><div className="zh-heading"><div><span className="zh-eyebrow">YOUR EVERYDAY WORK COPILOT</span><h1>把日常工作，交给舟知搭把手。</h1></div>{boot.engine.connected&&boot.engine.authenticated&&<span className="mw-ai ready" role="status"><Sparkles size={15}/>AI 已连接</span>}</div>
+ {nav==='membrane'&&assemblyRunning&&<div className="zh-taskbar"><RefreshCw className="zh-spin" size={15}/><span>AI任务执行中，较长工程清单需要几分钟。</span><button disabled={busy} onClick={()=>void perform(()=>request(`/preview/jobs/${assemblyJobs.find((j:any)=>j.status==='running').id}/cancel`,{}))}>停止当前任务</button></div>}
+ {nav==='members'&&boot.role==='admin'&&boot.adminMembersEnabled&&MembersView?<MembersView/>:nav==='settings'&&boot.role!=='member'&&PreviewSettings?<PreviewSettings server={boot.server} engine={boot.engine} running={anyRunning} onChanged={refresh}/>:nav==='assistant'?<><div className="zh-heading"><div><h1>把日常工作，交给舟知搭把手。</h1></div>{boot.engine.connected&&boot.engine.authenticated&&<span className="mw-ai ready" role="status"><Sparkles size={15}/>AI 已连接</span>}</div>
   <div className="zh-assistant-layout"><section className="zh-chat"><div className="zh-chat-header"><Bot size={18}/><b>{session?.name||'新工作对话'}</b><button className="zh-link" onClick={()=>void perform(newSession)}><Plus size={16}/>新对话</button></div>
-  <div className="zh-messages">{!session?.messages.length?<div className="zh-welcome"><div className="zh-ai-symbol"><Sparkles size={32}/></div><h2>你说任务，我来整理。</h2><p>从一个问题、一份资料、一张表开始。</p><div className="zh-suggestions">{['帮我把以下工作事项整理为本周计划，并输出 Excel','起草一份跨部门资料收集通知，生成 Word 文件','把以下内容提炼为汇报 PPT，根据内容选择适合的风格'].map(t=><button key={t} onClick={()=>setText(t)}>{t}<ArrowUp size={16}/></button>)}</div></div>:session.messages.map((m:any,i:number)=><article className={'zh-message '+m.role} key={i}><small>{m.role==='user'?'我':'舟知'}</small><div>{m.text}</div>{m.files?.map((f:any)=><a key={f.id} href={f.url} download={f.name} className="zh-file-download"><FileText size={20}/><span>{f.name}<small>已生成 · 点击下载</small></span><Download size={16}/></a>)}</article>)}{generalRunning&&<div className="zh-processing" role="status"><RefreshCw size={16} className="zh-spin"/>{generalProgress}，复杂任务会继续处理，可随时停止。</div>}{generalJobs.slice(-1).filter((j:any)=>j.status==='failed').map((j:any)=><div className="zh-inline-error" key={j.id}>上次执行未成功：{j.error}</div>)}<div ref={bottom}/></div>
-  <div className="zh-composer"><textarea aria-label="通用工作任务" placeholder="描述任务，或上传资料后继续提问…" value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))void send();}}/><div><button className="zh-link" onClick={()=>input.current?.click()} disabled={busy}><Paperclip size={16}/>添加资料</button><span>Word / Excel / PPT / Markdown</span><button title="发送任务" className="zh-primary zh-send" disabled={busy||generalRunning||!text.trim()} onClick={()=>void send()}><ArrowUp size={20}/></button></div></div></section>
+  <div className="zh-messages" onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.scrollTop-el.clientHeight<100;}}>
+   {!session?.messages.length?<div className="zh-welcome"><div className="zh-ai-symbol"><Sparkles size={32}/></div><h2>你说任务，我来整理。</h2><p>从一个问题、一份资料、一张表开始。</p><div className="zh-suggestions">{['帮我理一理这件事，给点建议','提炼这份资料的重点','把这些内容做成 PPT'].map(t=><button key={t} onClick={()=>setText(t)}>{t}<ArrowUp size={16}/></button>)}</div></div>:session.messages.map((m:any,i:number)=><article className={'zh-message '+m.role} key={i}>
+    <small>{m.role==='user'?'我':'舟知'}{m.delivery==='steer'&&<span className="zh-steer-receipt"> · 已补充到本轮</span>}</small>
+    {m.role==='assistant'?<AssistantText text={m.text}/>:<div className="zh-user-text">{m.text}</div>}
+    {m.files?.map((f:any)=><a key={f.id} href={f.url} download={f.name} className="zh-file-download"><FileText size={20}/><span>{f.name}<small>已生成 · 点击下载</small></span><Download size={16}/></a>)}
+   </article>)}
+   {generalRunning&&<div className="zh-waiting"><small>舟知</small><div><span className="zh-wait-status" role="status"><span className="zh-thinking-dots" aria-hidden="true"><i/><i/><i/></span>思考中…</span><span className="zh-wait-time">{generalProgress}</span><button type="button" className="zh-stop" disabled={stopping} onClick={()=>void stopGeneral()}><span aria-hidden="true">□</span>{stopping?'正在停止':'停止'}</button></div></div>}
+   {generalJobs.filter((j:any)=>j.status!=='queued').slice(-1).filter((j:any)=>j.status==='failed').map((j:any)=><div className="zh-inline-error" key={j.id}>上次执行未成功：{j.error}</div>)}<div ref={bottom}/>
+  </div>
+  <AssistantQueue items={queuedMessages} running={generalRunning} busy={busy} onEdit={(id:string,message:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{message},'PATCH'))} onRemove={(id:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{},'DELETE'))} onResume={()=>perform(()=>request(`/preview/sessions/${sessionId}/queue/resume`,{}))}/>
+  <div className="zh-composer"><textarea aria-label="通用工作任务" aria-describedby="zh-composer-hint" placeholder="说说你想处理的事，或上传资料…" value={text} maxLength={12000} onChange={e=>{setText(e.target.value);setNotice({sessionId:'',text:''});}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;compositionEnded.current=Date.now();}} onKeyDown={e=>{
+   const action=composerAction({...e,keyCode:e.nativeEvent.keyCode,isComposing:e.nativeEvent.isComposing},generalRunning,composing.current||Date.now()-compositionEnded.current<80);
+   if(action){e.preventDefault();void send(action);}
+  }}/><div><button className="zh-link" onClick={()=>input.current?.click()} disabled={busy}><Paperclip size={16}/>添加资料</button>{generalRunning&&<button type="button" className="zh-guide" title={`${modifier} + Shift + Enter：补充当前回答`} disabled={busy||!text.trim()} onClick={()=>void send('steer')}>补充本轮</button>}<button title={generalRunning?'排队发送，当前回答结束后处理':'发送消息'} aria-label={generalRunning?'排队发送':'发送消息'} className="zh-primary zh-send" disabled={busy||!text.trim()} onClick={()=>void send('queue')}><ArrowUp size={20}/></button></div><p id="zh-composer-hint" className="zh-composer-hint">{generalRunning?`回车排队 · ${modifier} + Shift + 回车补充本轮 · Shift + 回车换行`:'回车发送 · Shift + 回车换行'}</p></div>
+  {notice.sessionId===sessionId&&notice.text&&<p className="zh-send-notice" role="status">{notice.text}</p>}
+  </section>
   </div></>:!project?<div className="zh-settings-layout"><section className="zh-panel"><h1>还没有膜设备项目</h1><p className="zh-muted">新建项目开始工作，或从回收站恢复已有项目。</p><form onSubmit={e=>{e.preventDefault();void perform(async()=>{const p=await request('/projects',{name:newName.trim()||'新膜设备项目'});setProjectId(p.id);setNewName('');});}}><label className="zh-field">项目名称<input aria-label="新项目名称" value={newName} placeholder="新膜设备项目" maxLength={80} onChange={e=>setNewName(e.target.value)}/></label><button className="zh-primary" disabled={busy}>创建项目</button></form></section></div>:<>
   {newName&&<div className="zh-newproject"><input aria-label="新项目名称" value={newName} onChange={e=>setNewName(e.target.value)}/><button className="zh-primary" onClick={()=>void perform(async()=>{const p=await request('/projects',{name:newName});setProjectId(p.id);setNewName('');})}>创建项目</button><button onClick={()=>setNewName('')}>取消</button></div>}
   <MembraneWorkspace key={projectId} project={project} boot={boot} state={state} busy={busy} perform={perform} onUpload={()=>input.current?.click()} onCreate={()=>setNewName('未命名膜设备项目')}/>
