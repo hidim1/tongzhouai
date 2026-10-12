@@ -3,6 +3,7 @@ import {Bot,Layers3,ArrowUp,Paperclip,Plus,Sparkles,FileText,Download,Settings,R
 import {MembraneWorkspace} from './MembraneWorkspace';
 import {AssistantText} from './AssistantText';
 import {AssistantQueue} from './AssistantQueue';
+import {AssistantControls} from './AssistantControls';
 import {composerAction,elapsedLabel} from './assistant-input';
 import './preview.css';
 import './preview-assistant.css';
@@ -65,14 +66,14 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
     {m.role==='assistant'?<AssistantText text={m.text}/>:<div className="zh-user-text">{m.text}</div>}
     {m.files?.map((f:any)=><a key={f.id} href={f.url} download={f.name} className="zh-file-download"><FileText size={20}/><span>{f.name}<small>已生成 · 点击下载</small></span><Download size={16}/></a>)}
    </article>)}
-   {generalRunning&&<div className="zh-waiting"><small>舟知</small><div><span className="zh-wait-status" role="status"><span className="zh-thinking-dots" aria-hidden="true"><i/><i/><i/></span>思考中…</span><span className="zh-wait-time">{generalProgress}</span><button type="button" className="zh-stop" disabled={stopping} onClick={()=>void stopGeneral()}><span aria-hidden="true">□</span>{stopping?'正在停止':'停止'}</button></div></div>}
+   {generalRunning&&<div className="zh-waiting"><small>舟知</small><div><span className="zh-wait-status" role="status"><span className="zh-thinking-dots" aria-hidden="true"><i/><i/><i/></span>思考中…</span><span className="zh-wait-time">{generalProgress}</span></div></div>}
    {generalJobs.filter((j:any)=>j.status!=='queued').slice(-1).filter((j:any)=>j.status==='failed').map((j:any)=><div className="zh-inline-error" key={j.id}>上次执行未成功：{j.error}</div>)}<div ref={bottom}/>
   </div>
   <AssistantQueue items={queuedMessages} running={generalRunning} busy={busy} onEdit={(id:string,message:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{message},'PATCH'))} onRemove={(id:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{},'DELETE'))} onResume={()=>perform(()=>request(`/preview/sessions/${sessionId}/queue/resume`,{}))}/>
   <div className="zh-composer"><textarea aria-label="通用工作任务" aria-describedby="zh-composer-hint" placeholder="说说你想处理的事，或上传资料…" value={text} maxLength={12000} onChange={e=>{setText(e.target.value);setNotice({sessionId:'',text:''});}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;compositionEnded.current=Date.now();}} onKeyDown={e=>{
    const action=composerAction({...e,keyCode:e.nativeEvent.keyCode,isComposing:e.nativeEvent.isComposing},generalRunning,composing.current||Date.now()-compositionEnded.current<80);
    if(action){e.preventDefault();void send(action);}
-  }}/><div><button className="zh-link" onClick={()=>input.current?.click()} disabled={busy}><Paperclip size={16}/>添加资料</button>{generalRunning&&<button type="button" className="zh-guide" title={`${modifier} + Shift + Enter：补充当前回答`} disabled={busy||!text.trim()} onClick={()=>void send('steer')}>补充本轮</button>}<button title={generalRunning?'排队发送，当前回答结束后处理':'发送消息'} aria-label={generalRunning?'排队发送':'发送消息'} className="zh-primary zh-send" disabled={busy||!text.trim()} onClick={()=>void send('queue')}><ArrowUp size={20}/></button></div><p id="zh-composer-hint" className="zh-composer-hint">{generalRunning?`回车排队 · ${modifier} + Shift + 回车补充本轮 · Shift + 回车换行`:'回车发送 · Shift + 回车换行'}</p></div>
+  }}/><div><button className="zh-link" onClick={()=>input.current?.click()} disabled={busy}><Paperclip size={16}/>添加资料</button><AssistantControls running={generalRunning} hasText={!!text.trim()} busy={busy} stopping={stopping} onSend={mode=>void send(mode)} onStop={()=>void stopGeneral()}/></div><p id="zh-composer-hint" className="zh-composer-hint">{generalRunning?`回车排队 · ${modifier} + 回车补充本轮 · Shift + 回车换行`:'回车发送 · Shift + 回车换行'}</p></div>
   {notice.sessionId===sessionId&&notice.text&&<p className="zh-send-notice" role="status">{notice.text}</p>}
   </section>
   </div></>:!project?<div className="zh-settings-layout"><section className="zh-panel"><h1>还没有膜设备项目</h1><p className="zh-muted">新建项目开始工作，或从回收站恢复已有项目。</p><form onSubmit={e=>{e.preventDefault();void perform(async()=>{const p=await request('/projects',{name:newName.trim()||'新膜设备项目'});setProjectId(p.id);setNewName('');});}}><label className="zh-field">项目名称<input aria-label="新项目名称" value={newName} placeholder="新膜设备项目" maxLength={80} onChange={e=>setNewName(e.target.value)}/></label><button className="zh-primary" disabled={busy}>创建项目</button></form></section></div>:<>

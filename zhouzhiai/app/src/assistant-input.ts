@@ -1,7 +1,8 @@
 export type ComposerKey={key:string;shiftKey?:boolean;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;repeat?:boolean;isComposing?:boolean;keyCode?:number};
 export function composerAction(key:ComposerKey,running:boolean,compositionActive=false):'queue'|'steer'|null{
   if(key.key!=='Enter'||key.repeat||key.altKey||key.isComposing||key.keyCode===229||compositionActive)return null;
-  if(key.shiftKey){return running&&(key.ctrlKey||key.metaKey)?'steer':null;}
+  if(key.shiftKey)return null;
+  if(running&&(key.ctrlKey||key.metaKey))return 'steer';
   return 'queue';
 }
 export function elapsedLabel(createdAt:string,now=Date.now()){

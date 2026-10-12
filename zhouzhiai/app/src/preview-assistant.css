@@ -17,8 +17,8 @@
 .zh-assistant-page .zh-heading,
 .zh-assistant-page .zh-assistant-layout,
 .zh-assistant-page .zh-footer {
-  width: calc(100% - 80px);
-  max-width: 900px;
+  width: calc(100% - 64px);
+  max-width: 1440px;
   margin-inline: auto;
 }
 .zh-assistant-page .zh-heading {
@@ -45,6 +45,7 @@
 .zh-assistant-page .zh-chat {
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 .zh-assistant-page .zh-chat-header {
   height: 48px;
@@ -105,10 +106,16 @@
 .zh-answer-body code { background: #f0f5f7; border-radius: 4px; padding: 1px 4px; font-size: .9em; }
 .zh-answer-body pre code { padding: 0; background: transparent; }
 .zh-answer-body hr { border: 0; border-top: 1px solid #e6edef; margin: 20px 0; }
-.zh-answer-table { max-width: 100%; overflow-x: auto; margin: 12px 0 16px; }
-.zh-answer-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.zh-answer-table th,.zh-answer-table td { border: 1px solid #dfe8ed; text-align: left; vertical-align: top; padding: 9px 12px; min-width: 90px; }
-.zh-answer-table th { background: #f4f8fa; font-weight: 600; }
+.zh-answer-table { max-width: 100%; overflow-x: auto; margin: 14px 0 18px; border: 1px solid #dce7ed; border-radius: 9px; background: #fff; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.zh-answer-table:focus-visible { outline: 2px solid #7fc1d2; outline-offset: 2px; }
+/* Isolate chat tables from the engineering sheet's fixed first/third/fourth columns. */
+.zh-shell .zh-answer-table table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; font-size: 14px; min-width: 0; }
+.zh-shell .zh-answer-table table th,.zh-shell .zh-answer-table table td { width: auto; min-width: 0; border: 0; border-bottom: 1px solid #e5edf2; text-align: left; vertical-align: top; padding: 14px 16px; color: #365465; font-size: 14px; line-height: 1.75; white-space: normal; word-break: normal; overflow-wrap: break-word; }
+.zh-shell .zh-answer-table table th { background: #eef5f9; color: #24485d; font-weight: 600; }
+.zh-shell .zh-answer-table table td+td,.zh-shell .zh-answer-table table th+th { border-left: 1px solid #edf2f5; }
+.zh-shell .zh-answer-table table tbody tr:nth-child(even) td { background: #f8fbfd; }
+.zh-shell .zh-answer-table table tbody tr:last-child td { border-bottom: 0; }
+.zh-answer-table td p:last-child,.zh-answer-table th p:last-child { margin-bottom: 0; }
 .zh-image-alt { color: #6e8692; }
 .zh-copy { display: inline-flex; gap: 5px; align-items: center; border: 0; background: transparent; color: #91a2ac; padding: 4px 0; margin-top: 10px; font-size: 11px!important; }
 .zh-copy:hover,.zh-copy:focus-visible { color: #0087a8; }
@@ -124,7 +131,6 @@
 .zh-thinking-dots i:nth-child(3) { animation-delay: .36s; }
 @keyframes zh-think-pulse { 0%,80%,100% { opacity: .35; } 40% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .zh-thinking-dots i { animation: none; opacity: .75; } }
-.zh-stop { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d8e4e9; border-radius: 6px; padding: 3px 10px; background: #fff; color: #6a8593; font-size: 12px!important; }
 .zh-steer-receipt { color: #74928e; }
 .zh-queue { flex: none; border: 1px solid #e0e9ee; border-radius: 9px; background: #f7fafb; margin: 8px 0 0; padding: 9px 13px; font-size: 12px; color: #627e8d; }
 .zh-queue header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
@@ -136,7 +142,17 @@
 .zh-queue-edit { width: 100%; }
 .zh-queue-edit textarea { width: 100%; min-height: 65px; padding: 8px; border: 1px solid #d5e3e8; border-radius: 6px; color: #355968; resize: vertical; }
 .zh-queue-edit > div { display: flex; gap: 10px; }
-.zh-guide { margin-left: auto; border: 0; background: transparent; color: #658a95; font-size: 12px!important; padding: 6px 9px; }
+.zh-composer-actions { position: relative; display: inline-flex; align-items: stretch; flex: none; margin-left: auto; gap: 2px; }
+.zh-assistant-page .zh-composer-actions .zh-send { margin-left: 0; min-height: 36px; padding: 8px 11px!important; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.zh-assistant-page .zh-composer-actions .zh-send-stop { background: #eff5f7; border-color: #d9e5eb; color: #587986; }
+.zh-send-options { border: 1px solid #d8e6ec; background: #f5fafc; color: #678b9a; padding: 7px 5px; border-radius: 7px; display: flex; align-items: center; }
+.zh-send-options:hover,.zh-send-options[aria-expanded="true"] { background: #eaf4f8; color: #008eb4; }
+.zh-composer-menu { position: absolute; z-index: 20; right: 0; bottom: calc(100% + 10px); width: 224px; padding: 5px; border: 1px solid #dce7ed; border-radius: 10px; background: #fff; box-shadow: 0 6px 24px #214b6118; }
+.zh-composer-menu > button { display: flex; gap: 10px; align-items: flex-start; width: 100%; border: 0; border-radius: 6px; background: transparent; padding: 10px; color: #355a6d; font-size: 13px; text-align: left; }
+.zh-composer-menu > button > svg { margin-top: 3px; flex: none; }
+.zh-composer-menu > button small { display: block; margin-top: 3px; font-size: 11px; color: #8a9fab; }
+.zh-composer-menu > button:hover:not(:disabled),.zh-composer-menu > button:focus-visible { background: #eff7fa; outline: none; }
+.zh-composer-menu > button:disabled { opacity: .45; cursor: not-allowed; }
 .zh-send-notice { margin: 5px 3px 0; flex: none; font-size: 11px; color: #6c938e; }
 .zh-composer-hint { margin: 6px 0 0!important; color: #91a4af; font-size: 11px; line-height: 1.6; }
 .zh-assistant-page .zh-file-download {
@@ -182,8 +198,8 @@
 .zh-assistant-page .zh-attachmentbar,
 .zh-assistant-page .zh-error,
 .zh-assistant-page .zh-taskbar {
-  width: calc(100% - 80px);
-  max-width: 1040px;
+  width: calc(100% - 64px);
+  max-width: 1440px;
   margin: 12px auto 0;
   flex: none;
 }

@@ -4,11 +4,13 @@ import {composerAction,elapsedLabel} from '../src/assistant-input.ts';
 test('回车发送或排队，只有显式组合键引导；换行、输入法及重复按键保护',()=>{
  for(const running of [false,true]){
   assert.equal(composerAction({key:'Enter'},running),'queue');
-  assert.equal(composerAction({key:'Enter',ctrlKey:true},running),'queue');
   assert.equal(composerAction({key:'Enter',shiftKey:true},running),null);
-  for(const modifier of ['ctrlKey','metaKey'])assert.equal(composerAction({key:'Enter',shiftKey:true,[modifier]:true},running),running?'steer':null);
+  for(const modifier of ['ctrlKey','metaKey']){
+   assert.equal(composerAction({key:'Enter',[modifier]:true},running),running?'steer':'queue');
+   assert.equal(composerAction({key:'Enter',shiftKey:true,[modifier]:true},running),null);
+  }
   for(const input of [{key:'Enter',isComposing:true},{key:'Enter',keyCode:229},{key:'Enter',repeat:true},{key:'Enter',altKey:true},{key:'Tab'}])assert.equal(composerAction(input,running),null);
-  assert.equal(composerAction({key:'Enter',ctrlKey:true,shiftKey:true},running,true),null);
+  assert.equal(composerAction({key:'Enter',ctrlKey:true},running,true),null);
  }
 });
 test('计时只描述实际用时，不显示阶段、倒计时或虚假完成进度',()=>{

@@ -107,7 +107,9 @@ test('只有智能工作助理取消固定时限，页面进度与手动停止�
  assert.equal((routes.match(/timeoutMs:0/g)||[]).length,1);
  assert.match(routes,/allowWebSearch:true,timeoutMs:0,completeOnFinal:true,onPhase:/);
  const view=fs.readFileSync(new URL('../src/Preview.tsx',import.meta.url),'utf8');
- assert.match(view,/generalProgress/);assert.match(view,/思考中…/);assert.match(view,/zh-stop/);
+ assert.match(view,/generalProgress/);assert.match(view,/思考中…/);assert.match(view,/onStop=\{\(\)=>void stopGeneral\(\)\}/);
+ const controls=fs.readFileSync(new URL('../src/AssistantControls.tsx',import.meta.url),'utf8');
+ assert.match(controls,/停止回答/);assert.match(controls,/stop\?onStop\(\)/);
 });
 test('用户引导使用实际活跃回合，未交付草稿修订后才完成，结束后不假接收',async t=>{
  const f=fixture(t);const result=f.start();await flush();
