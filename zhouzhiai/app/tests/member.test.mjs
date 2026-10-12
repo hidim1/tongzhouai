@@ -14,18 +14,19 @@ import {publicPayload,publicError,assertPublicOutput} from '../server/member-pol
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zhouzhi-member-test-'));
 const password='member-test-password-only';
 const installation=randomBytes(32).toString('hex'),otherInstallation=randomBytes(32).toString('hex');
+const activateAndLogin=(registry,username,password,code,device,address)=>{registry.activate(username,code,device,address);return registry.login(username,password,device,address);};
 test.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 test('10组激活码单次使用、账号匹配、安装绑定、固定密码哈希与持久化',()=>{
  let time=Date.now();const file=path.join(dir,'registry-unit.json'),registry=new MemberRegistry(file,()=>time),accounts=registry.provision(10,password);
  assert.equal(new Set(accounts.map(a=>a.activationCode)).size,10);assert.equal(new Set(registry.data.users.map(u=>u.passwordHash)).size,10);
  assert.ok(!fs.readFileSync(file,'utf8').includes(password));assert.equal(fs.statSync(file).mode&0o777,0o600);
  assert.throws(()=>registry.provision(10,password),/禁止/);
- assert.throws(()=>registry.activate(accounts[1].username,password,accounts[0].activationCode,installation),/不正确/);
+ assert.throws(()=>registry.activate(accounts[1].username,accounts[0].activationCode,installation),/不正确/);
  assert.throws(()=>registry.login(accounts[0].username,password,installation),/尚未激活/);
- const token=registry.activate(accounts[0].username,password,accounts[0].activationCode,installation);assert.ok(registry.authenticate(token,installation));
+ const token=activateAndLogin(registry,accounts[0].username,password,accounts[0].activationCode,installation);assert.ok(registry.authenticate(token,installation));
  assert.equal(registry.data.users[0].activationHash,null);
- assert.throws(()=>registry.activate(accounts[0].username,password,accounts[0].activationCode,installation),/已激活/);
- assert.throws(()=>registry.activate(accounts[0].username,password,accounts[0].activationCode,otherInstallation),/已激活/);
+ assert.throws(()=>registry.activate(accounts[0].username,accounts[0].activationCode,installation),/已激活/);
+ assert.throws(()=>registry.activate(accounts[0].username,accounts[0].activationCode,otherInstallation),/已激活/);
  assert.equal(registry.authenticate(token,otherInstallation),null);
  assert.throws(()=>registry.login(accounts[0].username,password,otherInstallation),/已激活.*不匹配/);
  const restarted=new MemberRegistry(file,()=>time);assert.ok(restarted.authenticate(token,installation));
@@ -40,14 +41,14 @@ test('激活码自动补分隔线，兼容原清单；授权重置只影响指�
  assert.equal(normalizeActivationCode(code.replaceAll('-',' ')),code);
  assert.equal(normalizeActivationCode('bad'), '');
  const before=JSON.stringify(registry.data.users[1]);
- const token=registry.activate(accounts[0].username,password,raw,installation);
+ const token=activateAndLogin(registry,accounts[0].username,password,raw,installation);
  assert.equal(registry.authenticate(token,installation)?.username,accounts[0].username);
  registry.resetActivation(accounts[0].username,code);
  assert.equal(registry.authenticate(token,installation),null);
  assert.equal(JSON.stringify(registry.data.users[1]),before);
  assert.equal(registry.data.sessions.length,0);
  assert.throws(()=>registry.login(accounts[0].username,password,installation),/尚未激活/);
- const newToken=registry.activate(accounts[0].username,password,code.replaceAll('-',''),otherInstallation);
+ const newToken=activateAndLogin(registry,accounts[0].username,password,code.replaceAll('-',''),otherInstallation);
  assert.ok(registry.authenticate(newToken,otherInstallation));
  assert.throws(()=>registry.login(accounts[0].username,password,installation),/已激活.*不匹配/);
 });
@@ -63,14 +64,14 @@ test('激活输入框自动补线，完整复制粘贴和省略ZZ前缀均可输
 });
 test('追加独立测试账号保留原10账号与会话；安装绑定不随IP变化，也不限制为单会话',()=>{
  const registry=new MemberRegistry(path.join(dir,'registry-add.json')),accounts=registry.provision(10,password);
- const token=registry.activate(accounts[0].username,password,accounts[0].activationCode,installation);
+ const token=activateAndLogin(registry,accounts[0].username,password,accounts[0].activationCode,installation);
  const usersBefore=JSON.stringify(registry.data.users),sessionsBefore=JSON.stringify(registry.data.sessions);
  const added=registry.addMember('zhouzhics',password);
  assert.equal(registry.data.users.length,11);assert.equal(JSON.stringify(registry.data.users.slice(0,10)),usersBefore);
  assert.equal(JSON.stringify(registry.data.sessions),sessionsBefore);assert.ok(registry.authenticate(token,installation));
  assert.throws(()=>registry.addMember('zhouzhics',password),/已存在/);
  assert.throws(()=>registry.addMember('another',password,accounts[1].activationCode),/已分配/);
- const a=registry.activate(added.username,password,added.activationCode,otherInstallation,'192.0.2.10');
+ const a=activateAndLogin(registry,added.username,password,added.activationCode,otherInstallation,'192.0.2.10');
  const b=registry.login(added.username,password,otherInstallation,'198.51.100.10');
  assert.equal(registry.authenticate(a,otherInstallation).username,added.username);
  assert.equal(registry.authenticate(b,otherInstallation).username,added.username);
@@ -95,7 +96,7 @@ test('两账号工作区隔离；非本账号ID、配置接口、错误来源与
  const request=async(url,{token,body,method,device=installation,origin=base}={})=>fetch(base+url,{redirect:'manual',method:method||(body?'POST':'GET'),headers:{'X-Zhouzhi-Installation':device,...(token?{Cookie:'zhouzhi_member='+token}:{}),...(body?{Origin:origin,'X-Tongzhou-Client':'workspace','Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
  try{
   assert.equal((await request('/api/bootstrap')).status,401);
-  const a=registry.activate(accounts[0].username,password,accounts[0].activationCode,installation),b=registry.activate(accounts[1].username,password,accounts[1].activationCode,otherInstallation);
+  const a=activateAndLogin(registry,accounts[0].username,password,accounts[0].activationCode,installation),b=activateAndLogin(registry,accounts[1].username,password,accounts[1].activationCode,otherInstallation);
   let response=await request('/api/bootstrap',{token:a});assert.equal(response.status,200);let boot=await response.json();assert.equal(boot.role,'member');assert.equal(boot.projects.length,0);assert.equal(boot.engine.model,undefined);
   const post=await request('/api/projects',{token:a,body:{name:'账号一独立项目'}});assert.equal(post.status,200);const project=await post.json();
   boot=await(await request('/api/bootstrap',{token:b,device:otherInstallation})).json();assert.equal(boot.projects.length,0);

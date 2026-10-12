@@ -61,7 +61,7 @@ test('管理员会话授权、普通用户阻断、只读方法、下载和审�
   const url=d.sessions[0].messages[1].files[0].url;assert.equal(await(await fetch(base+url,{headers:{Cookie:cookie}})).text(),'成员测试成果');
   assert.equal((await fetch(base+url.replace('zhouzhi01','zhouzhi02'),{headers:{Cookie:cookie}})).status,404);
   for(const method of ['POST','PUT','PATCH','DELETE'])assert.equal((await fetch(base+'/api/admin/members/zhouzhi01',{method,headers:{Cookie:cookie,Origin:base}})).status,405);
-  const installation='b'.repeat(64),token=f.registry.activate('zhouzhi01','test-password-1234',f.issued[0].activationCode,installation);
+  const installation='b'.repeat(64);f.registry.activate('zhouzhi01',f.issued[0].activationCode,installation);const token=f.registry.login('zhouzhi01','test-password-1234',installation);
   assert.equal((await fetch(base+'/api/admin/members',{headers:{Cookie:'zhouzhi_member='+token,'X-Zhouzhi-Installation':installation}})).status,403);
   assert.equal((await fetch(base+'/api/admin/members',{headers:{Cookie:cookie,Origin:'http://evil.test'}})).status,403);
   const log=fs.readFileSync(path.join(f.data,'private','admin-member-access.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.deepEqual(log.map(x=>x.action),['list','view','download']);assert.ok(log.every(x=>x.actor==='admin'));assert.equal(fs.statSync(path.join(f.data,'private','admin-member-access.jsonl')).mode&0o777,0o600);

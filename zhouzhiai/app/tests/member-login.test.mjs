@@ -34,7 +34,7 @@ function fixture({saved=null,bridge=true,success=true}={}){
  vm.runInNewContext(script,context);return{username,password,show,remember,error,submit,form,calls};
 }
 test('登录和激活页支持密码显隐，记住默认关闭；成功才保存，失败不保存',async()=>{
- for(const activated of [false,true]){const page=memberPage(activated);assert.match(page,/id="remember-login" type="checkbox">记住账号密码/);assert.match(page,/id="show-password" type="button"/);assert.match(page,/\/member\/login.js/);}
+ for(const activated of [false]){const page=memberPage(activated);assert.match(page,/id="remember-login" type="checkbox">记住账号密码/);assert.match(page,/id="show-password" type="button"/);assert.match(page,/\/member\/login.js/);}
  const f=fixture();await Promise.resolve();assert.equal(f.remember.checked,false);assert.equal(f.password.type,'password');
  f.show.listeners.click();assert.equal(f.password.type,'text');assert.equal(f.show['aria-pressed'],'true');f.show.listeners.click();assert.equal(f.password.type,'password');
  f.username.value='user';f.password.value='password';f.remember.checked=true;await f.form.listeners.submit({preventDefault(){}});assert.equal(f.calls.saved[0].password,'password');assert.deepEqual(f.calls.redirect,['/']);
@@ -48,8 +48,8 @@ test('客户端登录/激活页移除底部连接提示，但不改账号、密�
  for(const activate of [false,true]){
   const page=memberPage(activate,'测试错误');
   assert.doesNotMatch(page,/当前为未加密内测连接|请仅在可信网络使用/);
-  assert.match(page,/name="username"/);assert.match(page,/name="password" type="password"/);
-  assert.match(page,/id="remember-login"/);assert.match(page,/id="show-password"/);
+  assert.match(page,/name="username"/);if(!activate)assert.match(page,/name="password" type="password"/);else assert.doesNotMatch(page,/name="password"/);
+  if(!activate){assert.match(page,/id="remember-login"/);assert.match(page,/id="show-password"/);}
   assert.match(page,/测试错误/);assert.match(page,/\/member\/(?:login|activate)/);
  }
  assert.match(memberPage(true),/分隔线自动补齐/);

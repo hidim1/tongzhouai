@@ -67,13 +67,13 @@ export function createMemberReader({data,registry,budgetFor=detailedBudget}){
    const jobs=array(p.jobs).filter(j=>j.sessionId===session.id),outputs=new Map(jobs.flatMap(j=>array(j.files)).map(f=>[f.id,f]));
    return {id:session.id,name:text(session.name)||'新工作对话',...gone(session),updatedAt:updated(session,jobs),files:array(session.files).map(f=>addFile(f,'session:'+session.id)).filter(Boolean),messages:array(session.messages).map(m=>({role:m.role==='user'?'user':'assistant',text:text(m.text),files:array(m.files).map(f=>addFile(outputs.get(f.id)||f,'session:'+session.id)).filter(Boolean)})),tasks:jobs.map(j=>({status:j.status,createdAt:j.createdAt,error:text(j.error)}))};
   });
-  const detail={demo:false,readonly:true,username:u.username,status:status(u),sessions,projects};
+  const detail={demo:false,readonly:true,username:u.username,...(u.email?{email:u.email}:{}),status:status(u),sessions,projects};
   return {detail,files};
  }
  function overview(){
   return {demo:false,members:array(registry?.data.users).map(u=>{
-   try {const d=build(u.username)?.detail;if(!d)throw new Error();return {username:u.username,status:status(u),conversations:d.sessions.filter(s=>!s.archivedAt).length,projects:d.projects.filter(p=>!p.archivedAt).length,archived:[...d.sessions,...d.projects].filter(x=>x.archivedAt).length,lastActivity:[...d.sessions,...d.projects].map(x=>x.updatedAt).filter(Boolean).sort().at(-1)||null};}
-   catch{return {username:u.username,status:status(u),conversations:0,projects:0,archived:0,lastActivity:null,unavailable:true};}
+   try {const d=build(u.username)?.detail;if(!d)throw new Error();return {username:u.username,...(u.email?{email:u.email}:{}),status:status(u),conversations:d.sessions.filter(s=>!s.archivedAt).length,projects:d.projects.filter(p=>!p.archivedAt).length,archived:[...d.sessions,...d.projects].filter(x=>x.archivedAt).length,lastActivity:[...d.sessions,...d.projects].map(x=>x.updatedAt).filter(Boolean).sort().at(-1)||null};}
+   catch{return {username:u.username,...(u.email?{email:u.email}:{}),status:status(u),conversations:0,projects:0,archived:0,lastActivity:null,unavailable:true};}
   })};
  }
  return {overview,build};
