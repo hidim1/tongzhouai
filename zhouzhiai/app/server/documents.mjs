@@ -43,7 +43,7 @@ export async function extractDocument(file) {
               .map((c) => $(c).text().trim()),
           ),
       );
-    return { text: raw.value.replace(/\n\n/g, "\n"), tables };
+    return { text: raw.value.replace(/\n\n/g, "\n"), tables,visualContent:$("img").length>0,parseNote:$("img").length?'正文和表格已提取，图片内容须查看实际页面，不能仅凭文本声称完整审阅。':'' };
   }
   if (ext === ".doc") {
     const d = await new WordExtractor().extract(file);
@@ -61,27 +61,35 @@ export async function extractDocument(file) {
     const wb = new ExcelJS.Workbook();
     try{await wb.xlsx.readFile(file);}catch{return readWorkbook(file);}
     const sheets = wb.worksheets.map((s) => {
-      const rows = [];
+      const rows = [],metadata=[];
       s.eachRow((row) => {
         const cells = {};
         row.eachCell((cell) => {
           let value = cell.value;
+          const formula=cell.formula,numberFormat=cell.numFmt;
+          const cached=formula?cell.result:value;
+          const kind=cached instanceof Date?'date':cached?.error?'error':typeof cached;
+          const raw=cached instanceof Date?cached.toISOString():cached?.error||cached?.text||cached?.richText?.map(r=>r.text).join('')||cached;
+          metadata.push({address:cell.address,type:kind,value:raw??null,numberFormat,...(formula?{formula,cachedResult:true,cacheMissing:cached===undefined||cached===null}:{})});
+          if(formula&&(cached===undefined||cached===null)){cells[cell.address]='[公式缓存缺失]';return;}
+          if(value instanceof Date)value=value.toISOString().slice(0,10);
           if (value && typeof value === "object") {
             value =
               value.result ??
               value.text ??
               value.richText?.map((r) => r.text).join("") ??
-              "";
+              value.error ?? "";
           }
+          if(value instanceof Date)value=value.toISOString().slice(0,10);
           if (value !== null && value !== "")
             cells[cell.address] = String(value);
         });
         if (Object.keys(cells).length) rows.push(cells);
       });
-      return { name: s.name, rows };
+      return { name: s.name, rows, cells:metadata };
     });
     return {
-      sheets,
+      sheets,cellMetadataVersion:1,
       text: sheets
         .map(
           (s) =>
@@ -102,9 +110,10 @@ export async function extractDocument(file) {
     const pdf = await getDocumentProxy(new Uint8Array(fs.readFileSync(file)));
     try {
       const { text } = await extractText(pdf, { mergePages: false });
-      return { text: text.map((p, i) => `第${i + 1}页\n${p}`).join("\n") };
+      const scanPages=text.flatMap((p,i)=>p.trim().length<12?[i+1]:[]);
+      return { text: text.map((p, i) => `第${i + 1}页\n${p}`).join("\n"),pageCount:text.length,scanPages,parseNote:scanPages.length?'仅提取PDF文字层；部分页面文字不足，须查看或识别扫描页后才能声称完整审阅。':'仅提取PDF文字层，图片和图表内容须查看真实页面。' };
     } finally {
-      await pdf.destroy();
+      if(typeof pdf.destroy==='function')await pdf.destroy();else await pdf.loadingTask?.destroy();
     }
   }
   if ([".txt", ".md", ".csv"].includes(ext))

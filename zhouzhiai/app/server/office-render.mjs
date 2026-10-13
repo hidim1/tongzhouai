@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';import path from 'node:path';import {spawn} from 'node:child_process';
 import {RUNTIME} from './config.mjs';
 import {officePackage,readPart,tags,tagPrefix} from './office-package.mjs';
+import {mapConcurrent} from './assistant-parallel.mjs';
 export async function recalculateOffice(file,buildDir,{cancelled=()=>false}={}){
  const zip=await officePackage(file);if(Object.keys(zip.files).some(p=>/^xl\/(?:externalLinks|pivotTables)\//.test(p)))throw Error('含外部链接或透视表的工作簿暂不能可靠自动重算，请提供独立数据副本');
  const original=new Map();for(const name of Object.keys(zip.files).filter(p=>/^xl\/worksheets\/sheet\d+\.xml$/.test(p))){const $=await readPart(zip,name);tags($,'c').each((_i,n)=>{if(tags($,'f',$(n)).length){const formula=tags($,'f',$(n)).text();if(/WEBSERVICE|DDE|RTD|https?:|\[|\|/i.test(formula))throw Error('不自动计算外部数据或网络公式');}});original.set(name,$);}
@@ -23,7 +24,8 @@ export function runOffice(binary,args,{cancelled=()=>false,timeout=240000}={}){r
  const timer=setTimeout(()=>{child.kill('SIGKILL');done(Error('文件渲染未完成，请减少单次处理范围后重试'));},timeout),poll=setInterval(()=>{if(cancelled()){child.kill('SIGKILL');done(Error('已停止任务'));}},300);
  child.stdout.on('data',v=>{stdout+=v;if(stdout.length>2*1024*1024){child.kill('SIGKILL');done(Error('文件渲染输出异常'));}});child.stderr.on('data',()=>{});child.on('error',()=>done(Error('文件预览服务不可用')));child.on('exit',code=>done(code?Error('文件渲染检查未完成'):null));
  });}
-export async function renderOffice(file,buildDir,{cancelled=()=>false}={}){
+export async function renderOffice(file,buildDir,{cancelled=()=>false,firstPage=1,lastPage=null,scale=1600,clipEnd=false}={}){
+ if(!Number.isSafeInteger(firstPage)||firstPage<1||lastPage!==null&&(!Number.isSafeInteger(lastPage)||lastPage<firstPage)||!Number.isSafeInteger(scale)||scale<800||scale>2400)throw Error('页面范围无效');
  await fs.mkdir(buildDir,{recursive:true});const renderDir=await fs.mkdtemp(path.join(buildDir,'render-')),bin=officeBinaries(),ext=path.extname(file).toLowerCase();let pdf=file;
  if(ext!=='.pdf'){
   if(!['.docx','.xlsx','.pptx'].includes(ext))throw Error('该文件格式暂无页面预览');const zip=await officePackage(file);
@@ -31,12 +33,14 @@ export async function renderOffice(file,buildDir,{cancelled=()=>false}={}){
   if(ext==='.docx'&&/DDEAUTO|INCLUDETEXT|INCLUDEPICTURE/i.test(await zip.file('word/document.xml').async('string')))throw Error('文件含外部内容字段，不能自动渲染');
   const profile='file://'+path.join(renderDir,'profile');await runOffice(bin.office,['-env:UserInstallation='+profile,'--headless','--convert-to','pdf','--outdir',renderDir,file],{cancelled});pdf=path.join(renderDir,path.basename(file,ext)+'.pdf');
  }
- const info=await runOffice(bin.pdfinfo,[pdf],{cancelled}),count=Number(info.match(/^Pages:\s+(\d+)/m)?.[1]);if(!count||count>200)throw Error('文件页数无法核对或超过单次200页，请拆分处理');
- await runOffice(bin.pdftoppm,['-png','-scale-to','1600',pdf,path.join(renderDir,'page')],{cancelled});const pages=(await fs.readdir(renderDir)).filter(n=>/^page-\d+\.png$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0])).map(n=>path.join(renderDir,n));if(pages.length!==count)throw Error('文件预览页面不完整');return {pdf,pages};
+ const info=await runOffice(bin.pdfinfo,[pdf],{cancelled}),count=Number(info.match(/^Pages:\s+(\d+)/m)?.[1]),end=clipEnd?Math.min(lastPage??count,count):lastPage??count;
+ if(!count||count>5000||firstPage>count||end>count||end-firstPage+1>200)throw Error('文件页数或范围无法核对，单批最多200页，请分批处理');
+ await runOffice(bin.pdftoppm,['-png','-f',String(firstPage),'-l',String(end),'-scale-to',String(scale),pdf,path.join(renderDir,'page')],{cancelled});const pages=(await fs.readdir(renderDir)).filter(n=>/^page-\d+\.png$/.test(n)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0])).map(n=>path.join(renderDir,n));if(pages.length!==end-firstPage+1)throw Error('文件预览页面不完整');return {pdf,pages,totalPages:count,firstPage,lastPage:end};
 }
 export async function reviewOffice(file,buildDir,{askAI,id,cancelled=()=>false}={}){
  const {pages,pdf}=await renderOffice(file,buildDir,{cancelled});const str={type:'string'},schema={type:'object',additionalProperties:false,required:['acceptable','issues'],properties:{acceptable:{type:'boolean'},issues:{type:'array',items:str}}};
- const issues=[];for(let offset=0;offset<pages.length;offset+=3){if(cancelled())throw Error('已停止任务');const result=await askAI(id,'检查以下真实文件页面的文字可读性、中文字体、表格是否裁切、图片是否变形、内容是否重叠和表格数字是否出现####。页面索引从'+(offset+1)+'开始。不要因为简洁、缺图片或没有装饰而拒绝，不重写内容，不添加事实。只能检查实际提供的页面。',schema,pages.slice(offset,offset+3),undefined,'low',{timeoutMs:0,completeOnFinal:true,allowSteering:false});if(!result.acceptable)issues.push(...(result.issues.length?result.issues:['页面内容不可读']).map(issue=>({pageStart:offset+1,issue})));}
+ const batches=Array.from({length:Math.ceil(pages.length/3)},(_,i)=>i*3);
+ const reviewed=await mapConcurrent(batches,async offset=>{const result=await askAI(id,'检查以下真实文件页面的文字可读性、中文字体、表格是否裁切、图片是否变形、内容是否重叠和表格数字是否出现####。页面索引从'+(offset+1)+'开始。不要因为简洁、缺图片或没有装饰而拒绝，不重写内容，不添加事实。只能检查实际提供的页面。',schema,pages.slice(offset,offset+3),undefined,'low',{timeoutMs:0,completeOnFinal:true,privateResult:true,allowSteering:false});return result.acceptable?[]:(result.issues.length?result.issues:['页面内容不可读']).map(issue=>({pageStart:offset+1,issue}));},{cancelled});const issues=reviewed.flat();
  if(issues.length)throw Object.assign(Error('文件排版检查未通过，暂未交付；请调整内容密度或版式后重试'),{code:'OFFICE_LAYOUT_FAILED',issues:issues.slice(0,25)});
  return {pageCount:pages.length,allPagesReviewed:true,pdf};
 }

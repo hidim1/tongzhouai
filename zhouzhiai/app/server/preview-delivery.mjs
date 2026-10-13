@@ -53,7 +53,7 @@ export function deliveryPolicy(message, history = []) {
     }
   }
   const allowed=[...formats].filter(format=>!excluded.has(format));
-  const editOnly=allowed.length>0&&/(?:修改|调整|更新|替换)/.test(text)&&/(?:不要|不用|别|不必)\s*(?:重新)?(?:重做|重建|重排|重写|重新生成)/.test(text);
+  const editOnly=allowed.length>0&&/(?:修改|调整|更新|替换)/.test(text)&&/(?:不要|不用|别|不必|不)\s*(?:重新)?(?:重做|重建|重排|重写|重新生成)/.test(text);
   return { formats: allowed,...(editOnly?{editOnly:true}:{}) };
 }
 

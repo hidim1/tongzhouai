@@ -22,6 +22,7 @@ import {makeWorkbook} from './preview-workbook.mjs';
 import {reviewPresentation,repairPresentationLayout} from './preview-presentation-review.mjs';
 import {publicAssistantSession} from './assistant-context.mjs';
 import {reviewOffice,buildReviewedOffice} from './office-render.mjs';
+import {verifyOfficeContent} from './office-content.mjs';
 
 const dir = path.join(DATA,'preview');
 fs.mkdirSync(dir,{recursive:true});
@@ -48,8 +49,10 @@ async function artifact(title,format,body,columns=[],rows=[],scope='通用输出
   const id=options.artifactId||uid('output');if(!/^[a-zA-Z0-9_-]{1,160}$/.test(id))throw Error('成果标识无效');const out=path.join(dir,'outputs');fs.mkdirSync(out,{recursive:true});
   const filename=safe(title).replace(/\.(xlsx|docx|md|pptx)$/i,'')+'.'+format, target=path.join(out,id+'.'+format);
   if(scope==='通用输出'&&options.jobId&&['docx','xlsx'].includes(format)){
-   await buildReviewedOffice({cancelled:options.cancelled,build:readableLayout=>format==='docx'?makeDocument(title,body,target,{readableLayout}):makeWorkbook(title,body,columns,rows,target,{extraSheets,plan:options.workbook,readableLayout}),review:attempt=>reviewOffice(target,path.join(dir,'document-build',id,'attempt-'+attempt),{askAI,id:options.jobId,cancelled:options.cancelled})});
-   return {id,name:filename,path:target,url:'/api/preview/outputs/'+id};
+   let contentCheck;
+   await buildReviewedOffice({cancelled:options.cancelled,build:async readableLayout=>{if(format==='docx')await makeDocument(title,body,target,{readableLayout});else await makeWorkbook(title,body,columns,rows,target,{extraSheets,plan:options.workbook,readableLayout});contentCheck=await verifyOfficeContent(target,{format,title,body,columns,rows,extraSheets,workbook:options.workbook});},review:attempt=>reviewOffice(target,path.join(dir,'document-build',id,'attempt-'+attempt),{askAI,id:options.jobId,cancelled:options.cancelled})});
+   options.onContentVerified?.(contentCheck);
+   return {id,name:filename,path:target,url:'/api/preview/outputs/'+id,createdAt:new Date().toISOString(),version:1};
   }
   if(format==='pptx') {
     const buildDir=path.join(dir,'presentation-build',id),settings={...options,root:ROOT,allowGenerated:process.env.ZHOUZHI_PRESENTATION_IMAGES!=='0',generateImage:payload=>runBridge(payload,720000),...(options.jobId?{review:({plan,previews})=>reviewPresentation(plan,previews,{askAI,id:options.jobId,cancelled:options.cancelled})}:{})};
@@ -66,7 +69,7 @@ async function artifact(title,format,body,columns=[],rows=[],scope='通用输出
     await makeDocument(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
   } else if(format==='md') await makeMarkdown(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
   else throw new Error('不支持该输出格式');
-  return {id,name:filename,path:target,url:'/api/preview/outputs/'+id};
+  return {id,name:filename,path:target,url:'/api/preview/outputs/'+id,createdAt:new Date().toISOString(),version:1};
 }
 function runBridge(payload,timeout=20000) {
   return new Promise((resolve,reject)=>{

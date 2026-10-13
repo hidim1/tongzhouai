@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import {nodeText,parseMarkdown} from '../shared/markdown.mjs';
+import {Decimal} from './assistant-decimal.mjs';
 const kinds=['text','number','currency','percentage','date'];
 const plain=value=>nodeText(parseMarkdown(String(value??''))).trim();
 const length=s=>[...String(s)].reduce((n,c)=>n+(/[\u3400-\u9fff]/.test(c)?2:1),0);
@@ -10,11 +11,13 @@ function valueFor(value,kind){
   if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw Error('日期须为完整年月日，不得猜测年份');
   const date=new Date(value+'T00:00:00Z');if(!Number.isFinite(+date)||date.toISOString().slice(0,10)!==value)throw Error('Excel日期无效');return date;
  }
- if(typeof value==='number'){if(!Number.isFinite(value))throw Error('Excel含无效数字');return value;}
+ if(typeof value==='number'){if(!Number.isFinite(value))throw Error('Excel含无效数字');if(Number.isInteger(value)&&!Number.isSafeInteger(value))throw Error('Excel数字超出可靠精度，长编号请使用文本列');return value;}
  if(['number','currency','percentage'].includes(kind)&&typeof value==='string'){
   const s=value.trim();if(/^(?:待确认|待核对|未记录|未提供|不适用|—)$/.test(s))return s;
-  if(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(s))return Number(s);
-  if(kind==='percentage'&&/^-?\d+(?:\.\d+)?%$/.test(s))return Number(s.slice(0,-1))/100;
+  if(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(s)||kind==='percentage'&&/^-?\d+(?:\.\d+)?%$/.test(s)){
+   const exact=s.endsWith('%')?Decimal.from(s.slice(0,-1)).div(100):Decimal.from(s),number=exact.result().value;
+   if(Decimal.from(number).compare(exact)!==0||Number.isInteger(number)&&!Number.isSafeInteger(number))throw Error('Excel数值超出可靠精度，请按用途明确舍入或使用文本列');return number;
+  }
   throw Error('数值列含无法核对的文本，请保留未知值为空或明确待确认');
  }
  if(typeof value==='boolean')return value;

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import JSZip from 'jszip';
 import {load} from 'cheerio';
-export function xml(source){if(/<!DOCTYPE|<!ENTITY/i.test(source))throw Error('文件含不受支持的外部定义');return load(source,{xmlMode:true});}
+export function xml(source){if(/<!DOCTYPE|<!ENTITY/i.test(source))throw Error('文件含不受支持的外部定义');return load(source.replace(/^\uFEFF/,''),{xmlMode:true});}
 export const tags=($,name,root=null)=>(root?root.find('*'):$('*')).filter((_i,n)=>n.name?.split(':').at(-1)===name);
 export const tagPrefix=node=>node?.name?.includes(':')?node.name.split(':')[0]+':':'';
 export async function officePackage(file){

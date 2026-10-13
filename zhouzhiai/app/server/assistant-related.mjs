@@ -1,0 +1,7 @@
+// Local relevance ranking, not a claim of embedding/semantic understanding.
+export function relevantFiles(files,{query,offset=0,limit=12}={}){
+ if(typeof query!=='string'||!query.trim()||query.length>200||!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>20)throw Error('相关资料检索范围无效');
+ const segmented=[...new Intl.Segmenter('zh',{granularity:'word'}).segment(query.toLowerCase())].filter(s=>s.isWordLike).map(s=>s.segment),terms=[...new Set(segmented.filter(t=>t.length>1||/[a-z0-9]/i.test(t)))];if(!terms.length)terms.push(query.toLowerCase());
+ const candidates=[];for(const f of files){const text=String(f.text||''),lower=text.toLowerCase();let position=0;for(let start=0;start<text.length;start+=1000){const end=Math.min(text.length,start+1400),chunk=lower.slice(start,end),matched=terms.filter(t=>chunk.includes(t)),phrase=chunk.includes(query.toLowerCase());if(!matched.length&&!phrase)continue;const score=matched.length*10+(phrase?25:0)+terms.filter(t=>String(f.name).toLowerCase().includes(t)).length*3;position++;candidates.push({id:f.id,name:f.name,offset:start,end,text:text.slice(start,end),matchedTerms:matched,score});if(position>10000)throw Error('资料检索范围过大，请缩小关键词');}}
+ candidates.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)||a.offset-b.offset);return{query,totalMatches:candidates.length,results:candidates.slice(offset,offset+limit),nextOffset:offset+limit<candidates.length?offset+limit:null,note:'按本地词组和关键词相关度排序，不是语义核实；需读取原文上下文，检索摘要不代表全文。'};
+}

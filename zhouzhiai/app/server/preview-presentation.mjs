@@ -5,6 +5,18 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {canvasProblems} from './preview-canvas.mjs';
 import {presentationAssets} from './preview-presentation-assets.mjs';
+import {verifyPresentationContent} from './office-content.mjs';
+import {officePackage,readPart,tags,tagPrefix} from './office-package.mjs';
+
+// Numeric-looking category labels are identifiers, not amounts. Keep leading zeros.
+export async function preserveChartCategoryText(file){
+ const zip=await officePackage(file);let changed=false;
+ for(const name of Object.keys(zip.files).filter(p=>/^ppt\/(?:slides\/)?charts\/[^/]+\.xml$/.test(p))){const $=await readPart(zip,name);let touched=false;for(const cat of tags($,'cat').toArray()){
+  for(const [from,to] of [['numLit','strLit'],['numRef','strRef'],['numCache','strCache']])for(const n of tags($,from,$(cat)).toArray()){n.name=tagPrefix(n)+to;touched=true;}
+  if(touched)tags($,'formatCode',$(cat)).remove();
+ }if(touched){zip.file(name,$.xml());changed=true;}}
+ if(changed)await fs.writeFile(file,await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'}));return{changed};
+}
 
 // Local preview only: use the desktop's bundled runtime, without changing it.
 const runtime=process.env.ZHOUZHI_PRESENTATION_RUNTIME || '/Users/lhy19950000/.cache/codex-runtimes/codex-primary-runtime/dependencies';
@@ -80,7 +92,7 @@ export async function makePresentation(raw,target,buildDir,options={}){
           const color=[luminance(s.background),luminance(d.textColor)].sort((a,b)=>a-b);if((color[1]+.05)/(color[0]+.05)<4.5)throw Error('PPT表格文字与页面背景不匹配');
           for(let r=0;r<values.length;r++)for(let c=0;c<e.headers.length;c++){const cell=table.getCell(r,c);cell.fill=r===0?d.textColor:s.background;cell.text.style={typeface:d.fontFamily,fontSize:e.fontSize,color:r===0?s.background:d.textColor,bold:r===0,insets:12};checkText({text:values[r][c],width:widths[c]-24,height:e.height/values.length-20,fontSize:e.fontSize,bold:r===0});}
         }else if(e.kind==='chart'){
-          charts.push(i+1);const chart=slide.charts.add(e.chartType,{position:{left:e.x,top:e.y,width:e.width,height:e.height-(e.unit?36:0)},categories:e.categories,series:e.series.map(r=>({...r,fill:d.accentColor})),hasLegend:e.series.length>1,dataLabels:{showValue:true,position:e.chartType==='bar'?'outEnd':'above',textStyle:{fontSize:22,color:d.textColor}},xAxis:{textStyle:{fontSize:22,color:d.textColor}},yAxis:{numberFormatCode:'0.##',textStyle:{fontSize:22,color:d.textColor}},chartFill:s.background,plotAreaFill:s.background});applyPresentationChartFont(chart,{fontFamily:d.fontFamily});if(e.unit)text(slide,e.id+'-unit',e.unit,e.x,e.y+e.height-30,e.width,30,20);
+          charts.push(i+1);const chart=slide.charts.add(e.chartType,{position:{left:e.x,top:e.y,width:e.width,height:e.height-(e.unit?36:0)},categories:e.categories,series:e.series.map(r=>({...r,fill:d.accentColor})),hasLegend:e.series.length>1,dataLabels:{showValue:true,numberFormatCode:'0.##',numberFormatSourceLinked:false,position:e.chartType==='bar'?'outEnd':'above',textStyle:{fontSize:22,color:d.textColor}},xAxis:{textStyle:{fontSize:22,color:d.textColor}},yAxis:{numberFormatCode:'0.##',textStyle:{fontSize:22,color:d.textColor}},chartFill:s.background,plotAreaFill:s.background});applyPresentationChartFont(chart,{fontFamily:d.fontFamily});if(e.unit)text(slide,e.id+'-unit',e.unit,e.x,e.y+e.height-30,e.width,30,20);
         }
       }
       if(s.notes){slide.speakerNotes.text=s.notes;slide.speakerNotes.setVisible(false);}
@@ -114,7 +126,7 @@ export async function makePresentation(raw,target,buildDir,options={}){
       }
       if(s.layout==='chart'){
         charts.push(i+1);
-        const chart=slide.charts.add(s.chart.type,{position:{left:72,top,width:1136,height:height-35},categories:s.chart.categories,series:s.chart.series.map(r=>({...r,fill:d.accentColor})),hasLegend:s.chart.series.length>1,dataLabels:{showValue:true,position:s.chart.type==='bar'?'outEnd':'above',textStyle:{fontSize:23,color:d.textColor}},xAxis:{textStyle:{fontSize:22,color:d.textColor}},yAxis:{numberFormatCode:'0.##',textStyle:{fontSize:22,color:d.textColor}},chartFill:d.background,plotAreaFill:d.background});
+        const chart=slide.charts.add(s.chart.type,{position:{left:72,top,width:1136,height:height-35},categories:s.chart.categories,series:s.chart.series.map(r=>({...r,fill:d.accentColor})),hasLegend:s.chart.series.length>1,dataLabels:{showValue:true,numberFormatCode:'0.##',numberFormatSourceLinked:false,position:s.chart.type==='bar'?'outEnd':'above',textStyle:{fontSize:23,color:d.textColor}},xAxis:{textStyle:{fontSize:22,color:d.textColor}},yAxis:{numberFormatCode:'0.##',textStyle:{fontSize:22,color:d.textColor}},chartFill:d.background,plotAreaFill:d.background});
         applyPresentationChartFont(chart,{fontFamily:d.fontFamily});
         if(s.chart.unit)text(slide,'chart-unit',s.chart.unit,72,655,1000,34,23);
       }
@@ -122,12 +134,13 @@ export async function makePresentation(raw,target,buildDir,options={}){
     if(s.notes){slide.speakerNotes.text=s.notes;slide.speakerNotes.setVisible(false);}
   }
   await fs.writeFile(path.join(buildDir,'ai-design.json'),JSON.stringify(data,null,2));
-  const candidate=path.join(buildDir,'candidate.pptx');await(await PresentationFile.exportPptx(presentation)).save(candidate);
+  const candidate=path.join(buildDir,'candidate.pptx');await(await PresentationFile.exportPptx(presentation)).save(candidate);await preserveChartCategoryText(candidate);
   const previews=[];
   for(const [i,slide] of presentation.slides.items.entries()){
     const png=await presentation.export({slide,format:'png',scale:1}),file=path.join(buildDir,`slide-${i+1}.png`);await fs.writeFile(file,new Uint8Array(await png.arrayBuffer()));previews.push(file);
   }
   if(options.review)await options.review({plan:data,previews});
   await finalizePresentation({workspaceDir:path.resolve(buildDir,'../../..'),candidatePath:candidate,finalPath:target,pythonExecutable:process.env.ZHOUZHI_PYTHON || path.join(runtime,'python/bin/python3'),integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-bullet-geometry','--validate-heading-fit',...tables.flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:data.slides.length,requiredNativeTableOwnerSlides:tables,requiredNativeChartOwnerSlides:charts,materializeLiteralChartWorkbooks:charts.length>0,fontPolicy:{basis:'design',families:[d.fontFamily]},verifyArtifactToolImport:true,receiptPath:path.join(buildDir,'validation.json')});
-  return {slideCount:data.slides.length,designRationale:d.rationale,previews};
+  const contentCheck=await verifyPresentationContent(target,data);options.onContentVerified?.(contentCheck);
+  return {slideCount:data.slides.length,designRationale:d.rationale,previews,contentCheck};
 }
