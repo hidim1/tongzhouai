@@ -53,8 +53,8 @@ test('PPT图片只来自本轮资料、品牌或授权生图；没有张数上�
 });
 test('PPT视觉检查必须查看所有页面；排版修正不能改事实或移除数据',async()=>{
  assert.equal(assistantResult(JSON.stringify({acceptable:true,problems:[],repairs:[],sources:[]}),presentationReviewSchema,v=>v).output.acceptable,true);
- const p=plan();p.slides=Array.from({length:5},()=>structuredClone(p.slides[0]));let calls=0;
- await reviewPresentation(p,['a','b','c','d','e'],{id:'test',askAI:async(_id,_text,_schema,images)=>{calls++;assert.ok(images.length<=4);return{acceptable:true,problems:[],repairs:[]};}});assert.equal(calls,2);
+ const p=plan();p.slides=Array.from({length:7},()=>structuredClone(p.slides[0]));let calls=0;const viewed=[];
+ await reviewPresentation(p,['a','b','c','d','e','f','g'],{id:'test',askAI:async(_id,_text,_schema,images)=>{calls++;assert.ok(images.length<=3);viewed.push(...images);return{acceptable:true,problems:[],repairs:[]};}});assert.equal(calls,3);assert.deepEqual(viewed,['a','b','c','d','e','f','g']);
  const changed=plan();changed.slides[0].elements[1].text='伪造新事实';assert.notEqual(presentationFacts(changed),presentationFacts(plan()));
  await assert.rejects(repairPresentationLayout(plan(),'字号不足',{askAI:async()=>changed}),/改变了原始内容/);
  await assert.rejects(reviewPresentation(plan(),['a'],{askAI:async()=>({acceptable:false,problems:['文字太小'],repairs:[]})}),/未通过/);

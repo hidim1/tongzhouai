@@ -2,11 +2,11 @@
  const dialog=document.getElementById('password-dialog'),form=document.getElementById('password-form'),open=document.getElementById('open-password');
  if(!dialog||!form||!open)return;
  const error=document.getElementById('password-error'),success=document.getElementById('password-success'),submit=form.querySelector('button[type="submit"]');let busy=false;
- const clear=()=>{form.reset();error.textContent='';for(const field of form.querySelectorAll('input[type="text"],input[type="password"]'))if(field.name!=='username')field.type='password';for(const button of form.querySelectorAll('[data-password-target]')){button.textContent='显示密码';button.setAttribute('aria-pressed','false');}};
+ const clear=()=>{form.reset();error.textContent='';for(const field of form.querySelectorAll('input[type="text"],input[type="password"]'))if(field.name!=='username')field.type='password';for(const button of form.querySelectorAll('[data-password-target]')){button.setAttribute('aria-label','显示密码');button.setAttribute('aria-pressed','false');}};
  open.addEventListener('click',()=>{clear();form.elements.username.value=document.getElementById('member-username').value;dialog.showModal();});
  for(const id of ['close-password','return-login'])document.getElementById(id).addEventListener('click',()=>dialog.close());
  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});dialog.addEventListener('close',clear);
- for(const button of form.querySelectorAll('[data-password-target]'))button.addEventListener('click',()=>{const field=document.getElementById(button.dataset.passwordTarget),show=field.type==='password';field.type=show?'text':'password';button.textContent=show?'隐藏密码':'显示密码';button.setAttribute('aria-pressed',String(show));});
+ for(const button of form.querySelectorAll('[data-password-target]'))button.addEventListener('click',()=>{const field=document.getElementById(button.dataset.passwordTarget),show=field.type==='password';field.type=show?'text':'password';button.setAttribute('aria-label',show?'隐藏密码':'显示密码');button.setAttribute('aria-pressed',String(show));});
  form.addEventListener('submit',async event=>{
   event.preventDefault();if(busy||!form.reportValidity())return;
   if(form.elements.newPassword.value!==form.elements.confirmPassword.value){error.textContent='两次输入的新密码不一致';return;}

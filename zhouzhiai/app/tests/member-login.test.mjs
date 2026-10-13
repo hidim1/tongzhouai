@@ -37,12 +37,18 @@ test('登录和激活页支持密码显隐，记住默认关闭；成功才保�
  for(const activated of [false]){const page=memberPage(activated);assert.match(page,/id="remember-login" type="checkbox">记住账号密码/);assert.match(page,/id="show-password" type="button"/);assert.match(page,/\/member\/login.js/);}
  const f=fixture();await Promise.resolve();assert.equal(f.remember.checked,false);assert.equal(f.password.type,'password');
  f.show.listeners.click();assert.equal(f.password.type,'text');assert.equal(f.show['aria-pressed'],'true');f.show.listeners.click();assert.equal(f.password.type,'password');
+ assert.equal(f.show['aria-label'],'显示密码');assert.equal(f.show.textContent,undefined);
  f.username.value='user';f.password.value='password';f.remember.checked=true;await f.form.listeners.submit({preventDefault(){}});assert.equal(f.calls.saved[0].password,'password');assert.deepEqual(f.calls.redirect,['/']);
  const failed=fixture({success:false});await Promise.resolve();failed.remember.checked=true;await failed.form.listeners.submit({preventDefault(){}});assert.equal(failed.calls.saved.length,0);assert.match(failed.error.textContent,/不正确/);
  const restored=fixture({saved:{username:'old-user',password:'saved-password'}});await Promise.resolve();assert.equal(restored.username.value,'old-user');assert.equal(restored.password.type,'password');assert.equal(restored.remember.checked,true);restored.remember.checked=false;restored.remember.listeners.change();assert.equal(restored.calls.clear,1);
  const oldClient=fixture({bridge:false});assert.equal(oldClient.remember.disabled,true);oldClient.show.listeners.click();assert.equal(oldClient.password.type,'text');
  const race=fixture({saved:{username:'old',password:'old'}});race.username.value='new';race.username.listeners.input();await Promise.resolve();assert.equal(race.username.value,'new');assert.equal(race.password.value,'');
  assert.doesNotMatch(script,/localStorage|sessionStorage|document\.cookie/);
+});
+test('密码按钮仅显示眼睛图标，登录及修改密码四个按钮保留无障碍名称',()=>{
+ const page=memberPage(false);assert.equal((page.match(/aria-label="显示密码"/g)||[]).length,4);assert.equal((page.match(/class="eye-open"/g)||[]).length,4);assert.equal((page.match(/class="eye-closed"/g)||[]).length,4);
+ assert.doesNotMatch(page,/>显示密码<|>隐藏密码</);assert.match(page,/aria-hidden="true"/);assert.match(page,/:focus-visible/);
+ for(const file of ['login.js','password.js']){const js=fs.readFileSync(new URL('../public/member/'+file,import.meta.url),'utf8');assert.doesNotMatch(js,/(?:show|button)\.textContent/);assert.match(js,/setAttribute\('aria-label'/);}
 });
 test('客户端登录/激活页移除底部连接提示，但不改账号、密码或激活功能',()=>{
  for(const activate of [false,true]){

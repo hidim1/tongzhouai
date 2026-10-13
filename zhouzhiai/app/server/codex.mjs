@@ -71,6 +71,7 @@ export class CodexAdapter extends EventEmitter {
     this.process.stderr.on("data", () => {});
     await this.request("initialize", {
       clientInfo: { name: "tongzhou_ai", title: "舟知", version: "1.0.0" },
+      capabilities: {experimentalApi:true},
     }).catch((e) => {
       throw new Error("初始化连接失败：" + e.message);
     });

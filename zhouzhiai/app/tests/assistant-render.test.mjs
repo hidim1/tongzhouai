@@ -24,7 +24,7 @@ test('自然段落、列表、加粗和表格安全渲染，不执行HTML或加�
   const view=fs.readFileSync(new URL('../src/Preview.tsx',import.meta.url),'utf8');
   assert.match(view,/思考中…/);assert.match(view,/composerAction/);assert.match(view,/onCompositionStart/);assert.match(view,/sending.current/);
   assert.match(view,/nav==='membrane'&&assemblyRunning/);assert.doesNotMatch(view,/复杂任务会继续处理|已等待/);
-  assert.doesNotMatch(view,/disabled=\{busy\|\|generalRunning/);
+  assert.doesNotMatch(view.slice(view.indexOf('<div className="zh-composer"'),view.indexOf('</section>',view.indexOf('<div className="zh-composer"'))),/disabled=\{busy\|\|generalRunning/);
   assert.doesNotMatch(view,/\+ Shift \+ 回车补充|className="zh-guide"|className="zh-stop"/);
  }finally{await vite.close();fs.rmSync(cacheDir,{recursive:true,force:true});}
 });

@@ -5,6 +5,7 @@ import mammoth from "mammoth";
 import WordExtractor from "word-extractor";
 import { load } from "cheerio";
 import { extractText, getDocumentProxy } from "unpdf";
+import {readPresentation,readWorkbook} from './office-package.mjs';
 import {
   Document,
   Packer,
@@ -24,6 +25,7 @@ import {
 // Portable document processing: no Office, Python or host-specific runtime.
 export async function extractDocument(file) {
   const ext = path.extname(file).toLowerCase();
+  if(ext==='.pptx')return readPresentation(file);
   if (ext === ".docx") {
     const raw = await mammoth.extractRawText({ path: file });
     const html = await mammoth.convertToHtml({ path: file });
@@ -57,7 +59,7 @@ export async function extractDocument(file) {
   }
   if (ext === ".xlsx") {
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.readFile(file);
+    try{await wb.xlsx.readFile(file);}catch{return readWorkbook(file);}
     const sheets = wb.worksheets.map((s) => {
       const rows = [];
       s.eachRow((row) => {

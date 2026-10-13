@@ -20,6 +20,8 @@ import {assertPublicOutput} from './member-policy.mjs';
 import {makeDocument,makeMarkdown} from './preview-document.mjs';
 import {makeWorkbook} from './preview-workbook.mjs';
 import {reviewPresentation,repairPresentationLayout} from './preview-presentation-review.mjs';
+import {publicAssistantSession} from './assistant-context.mjs';
+import {reviewOffice} from './office-render.mjs';
 
 const dir = path.join(DATA,'preview');
 fs.mkdirSync(dir,{recursive:true});
@@ -31,19 +33,19 @@ for (const j of [...db.jobs,...db.images]) if (['running','queued'].includes(j.s
     const s=db.sessions.find(s=>s.id===j.sessionId);if(s)s.queuePaused=true;
     if(j.status==='queued')continue; // Retain pending messages; resume only by user action.
   }
-  j.status='failed';j.error='服务重启，请重试';
+  j.status='failed';j.error='服务重启，请重试';if(j.type==='general'&&j.checkpoint)j.canResume=true;
 }
 for(const j of db.jobs)for(const f of j.files||[])f.name=f.name.replace(/\.(xlsx|docx|md)\.\1$/i,'.$1');
 for(const s of db.sessions)for(const m of s.messages)for(const f of m.files||[])f.name=f.name.replace(/\.(xlsx|docx|md)\.\1$/i,'.$1');
 function save() {fs.writeFileSync(dbPath+'.tmp',JSON.stringify(db));fs.renameSync(dbPath+'.tmp',dbPath);}
 save();
 const cleanFile = ({path:_,text, ...f})=>({...f,textPreview:(text||'').slice(0,2000)});
-const upload = multer({dest:path.join(dir,'uploads'),limits:{fileSize:30*1024*1024,files:12},fileFilter:(req,file,cb)=>cb(null,/\.(docx?|xlsx|pdf|txt|md|csv|png|jpe?g|dwg|dxf|step|stp|iges|igs|sldprt|sldasm)$/i.test(file.originalname))});
+const upload = multer({dest:path.join(dir,'uploads'),limits:{fileSize:30*1024*1024,files:12},fileFilter:(req,file,cb)=>cb(null,/\.(docx?|pptx|xlsx|pdf|txt|md|csv|png|jpe?g|dwg|dxf|step|stp|iges|igs|sldprt|sldasm)$/i.test(file.originalname))});
 const known3D = name => /\.(step|stp|iges|igs|sldprt|sldasm)$/i.test(name);
 const safe = str => String(str||'输出').replace(/[\/\\:*?"<>|\x00-\x1f]/g,'_').slice(0,80);
 async function artifact(title,format,body,columns=[],rows=[],scope='通用输出',presentation=null,extraSheets=[],options={}) {
   assertPublicOutput({title,body,columns,rows,scope,presentation,extraSheets,workbook:options.workbook});
-  const id=uid('output'), out=path.join(dir,'outputs');fs.mkdirSync(out,{recursive:true});
+  const id=options.artifactId||uid('output');if(!/^[a-zA-Z0-9_-]{1,160}$/.test(id))throw Error('成果标识无效');const out=path.join(dir,'outputs');fs.mkdirSync(out,{recursive:true});
   const filename=safe(title).replace(/\.(xlsx|docx|md|pptx)$/i,'')+'.'+format, target=path.join(out,id+'.'+format);
   if(format==='pptx') {
     const buildDir=path.join(dir,'presentation-build',id),settings={...options,root:ROOT,allowGenerated:process.env.ZHOUZHI_PRESENTATION_IMAGES!=='0',generateImage:payload=>runBridge(payload,720000),...(options.jobId?{review:({plan,previews})=>reviewPresentation(plan,previews,{askAI,id:options.jobId,cancelled:options.cancelled})}:{})};
@@ -60,6 +62,7 @@ async function artifact(title,format,body,columns=[],rows=[],scope='通用输出
     await makeDocument(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
   } else if(format==='md') await makeMarkdown(title,(scope==='通用输出'?'':scope+'\n\n')+body,target);
   else throw new Error('不支持该输出格式');
+  if(scope==='通用输出'&&options.jobId&&['docx','xlsx'].includes(format))await reviewOffice(target,path.join(dir,'document-build',id),{askAI,id:options.jobId,cancelled:options.cancelled});
   return {id,name:filename,path:target,url:'/api/preview/outputs/'+id};
 }
 function runBridge(payload,timeout=20000) {
@@ -78,12 +81,12 @@ const imageInputs=files=>files.map(imagePath).filter(Boolean).slice(0,3);
 const fileContext = files => files.map(f=>({id:f.id,name:f.name,status:f.status,imageAttached:!!imagePath(f)&&imageInputs(files).includes(imagePath(f)),note:(f.parseNote||f.error||f.cadNote||'')+((f.text||'').length>30000?' 本文件文本超过本轮30000字符范围，未读取全部；不得宣称完整分析。':''),text:(f.text||'').slice(0,30000)}));
 export function installPreview(app) {
   installWorkflow(app,{db,save,runBridge,askAI,artifact,fileContext,imageInputs});
-  const assistant=createAssistant({db,save,askAI,steerAI,cancelAI,artifact,fileContext,imageInputs});
+  const assistant=createAssistant({db,save,askAI,steerAI,cancelAI,artifact,fileContext,imageInputs,extractDocument});
   const publicArtifact=({path:_,...f})=>f;
   app.get('/api/preview/state',(req,res)=>{
     const hidden=new Set([...db.sessions,...store.projects].filter(x=>x.archivedAt).map(x=>x.id));
     const versions=db.versions.filter(v=>!hidden.has(v.projectId));
-    res.json({sessions:db.sessions.filter(s=>!s.archivedAt).map(s=>({...s,files:s.files.map(cleanFile)})),jobs:db.jobs.filter(j=>!hidden.has(j.sessionId)&&!hidden.has(j.projectId)).map(j=>({...publicAssistantJob(j),files:(j.files||[]).map(publicArtifact)})),versions:versions.map(v=>({...v,outputs:(v.outputs||[]).map(publicArtifact)})),images:db.images.filter(j=>versions.some(v=>v.id===j.versionId)).map(publicArtifact),archived:[...db.sessions.filter(s=>s.archivedAt).map(({id,name,archivedAt})=>({id,name,archivedAt,type:'sessions'})),...store.projects.filter(p=>p.archivedAt).map(({id,name,archivedAt})=>({id,name,archivedAt,type:'projects'}))],provider:providerStatus(),templates:templates.map(t=>({id:t.template_id,name:t.project_name,routes:t.route_tags,count:t.bom.rows.length})),localOnly:!SERVER});
+    res.json({sessions:db.sessions.filter(s=>!s.archivedAt).map(s=>publicAssistantSession(s,cleanFile)),jobs:db.jobs.filter(j=>!hidden.has(j.sessionId)&&!hidden.has(j.projectId)).map(j=>({...publicAssistantJob(j),files:(j.files||[]).map(publicArtifact)})),versions:versions.map(v=>({...v,outputs:(v.outputs||[]).map(publicArtifact)})),images:db.images.filter(j=>versions.some(v=>v.id===j.versionId)).map(publicArtifact),archived:[...db.sessions.filter(s=>s.archivedAt).map(({id,name,archivedAt})=>({id,name,archivedAt,type:'sessions'})),...store.projects.filter(p=>p.archivedAt).map(({id,name,archivedAt})=>({id,name,archivedAt,type:'projects'}))],provider:providerStatus(),templates:templates.map(t=>({id:t.template_id,name:t.project_name,routes:t.route_tags,count:t.bom.rows.length})),localOnly:!SERVER});
   });
   app.post('/api/preview/image/check',async(req,res)=>res.json(await runBridge({action:'image-check'},50000)));
   app.delete('/api/preview/sessions/:id',(req,res)=>{const result=archiveItem(db.sessions.find(s=>s.id===req.params.id),db.jobs);save();res.json(result);});
@@ -110,6 +113,7 @@ export function installPreview(app) {
   app.patch('/api/preview/sessions/:id/queue/:jobId',(req,res)=>res.json(assistant.edit(req.params.id,req.params.jobId,req.body.message)));
   app.delete('/api/preview/sessions/:id/queue/:jobId',(req,res)=>res.json(assistant.remove(req.params.id,req.params.jobId)));
   app.post('/api/preview/sessions/:id/queue/resume',(req,res)=>res.json(assistant.resume(req.params.id)));
+  app.post('/api/preview/jobs/:id/continue',(req,res)=>res.json(assistant.continue(req.params.id)));
   app.post('/api/preview/projects/:id/files',upload.array('files',12),async(req,res)=>{
     const p=getProject(req.params.id);for(const f of req.files||[]) {try{const name=Buffer.from(f.originalname,'latin1').toString('utf8');const item=await ingest(p,f.path,name);if(known3D(name)){item.status='pending';item.parseNote='原生3D仅归档。请另传装配清单CSV/Excel、尺寸表及导出视图；当前不自动解析几何或算量。';item.text='';}}finally{fs.unlinkSync(f.path);}}
     const {save:saveMain}=await import('./store.mjs');saveMain();res.json({files:p.files.map(cleanFile)});

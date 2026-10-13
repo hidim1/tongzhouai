@@ -16,7 +16,7 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  previewAI.connect=async()=>{previewAI.status.authenticated=true;};
  previewAI.interrupt=async()=>{};
  previewAI.request=async(method,p)=>{
-  if(method==='thread/start'){assert.equal(p.config.web_search,'live');threads.push(p);return{thread:{id:'assistant-api-'+(++sequence)}};}
+  if(method==='thread/start'||method==='thread/resume'){assert.equal(p.config.web_search,'live');threads.push(p);return{thread:{id:p.threadId||'assistant-api-'+(++sequence)}};}
   if(method==='turn/start'){
    assert.match(p.input[0].text,/final_answer/);
    requests.push(p);
@@ -36,10 +36,12 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  assert.equal(job.status,'completed',job.error);assert.equal(job.phase,'已完成');assert.ok(job.completedAt);assert.equal(job.files.length,1);assert.equal(phases[0],'正在检索公开资料');
  const messages=state.sessions.find(x=>x.id===s.id).messages;assert.equal(messages.length,2);assert.equal(messages[1].text,'已整理完成。');
  const file=await fetch(base+job.files[0].url);assert.equal(file.status,200);assert.match(await file.text(),/公开资料整理测试/);
+ previewAI.emit('event',{method:'turn/completed',params:{threadId:'assistant-api-1',turn:{status:'completed'}}});
  // The next ordinary question must not inherit the preceding file instruction.
  const chat=await post(`/preview/sessions/${s.id}/tasks`,{message:'给我一个同舟纵横公司的整体介绍'});
  for(let i=0;i<100;i++){state=await(await fetch(base+'/api/preview/state')).json();job=state.jobs.find(x=>x.id===chat.id);if(job.status!=='running')break;await new Promise(r=>setTimeout(r,10));}
  assert.equal(job.status,'completed',job.error);assert.equal(job.files.length,0);assert.match(job.answer,/公司介绍正文/);
+ previewAI.emit('event',{method:'turn/completed',params:{threadId:'assistant-api-1',turn:{status:'completed'}}});
  assert.deepEqual(Object.keys(requests.at(-1).outputSchema.properties),['answer','sources']);
  assert.equal(job.searchReferences,undefined);assert.equal(job.sources,undefined);
  assert.doesNotMatch(JSON.stringify(state.sessions),/example\.com\/company/);

@@ -1,7 +1,7 @@
 (() => {
  const form=document.querySelector('form'),password=document.querySelector('input[name="password"]'),username=document.querySelector('input[name="username"]'),show=document.getElementById('show-password'),remember=document.getElementById('remember-login'),error=document.querySelector('.error');
  if(!form||!password||!show)return;
- show.addEventListener('click',()=>{const visible=password.type==='password';password.type=visible?'text':'password';show.textContent=visible?'隐藏密码':'显示密码';show.setAttribute('aria-pressed',String(visible));});
+ show.addEventListener('click',()=>{const visible=password.type==='password';password.type=visible?'text':'password';show.setAttribute('aria-label',visible?'隐藏密码':'显示密码');show.setAttribute('aria-pressed',String(visible));});
  const bridge=window.zhouzhiLogin;
  if(!bridge){remember.disabled=true;remember.closest('label').title='记住账号密码仅在更新后的舟知客户端中可用';}
  let touched=false,busy=false;

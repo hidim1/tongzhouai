@@ -37,6 +37,17 @@ test('内部视觉检查没有answer字段也可正式交付，不触发聊天�
  const value={acceptable:true,problems:[],repairs:[]};f.item({...value,sources:[]});assert.deepEqual(await result,value);f.complete('completed');
  assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,0);
 });
+test('动态资料工具响应仅交给对应活跃会话，继续会话使用resume不重建历史',async t=>{
+ const f=fixture(t),responses=[],original=previewAI.respond;previewAI.respond=(id,value)=>responses.push({id,value});t.after(()=>previewAI.respond=original);
+ let called;const tools={definitions:[{type:'function',name:'read_current',description:'读取当前资料',inputSchema:{type:'object',properties:{},required:[],additionalProperties:false}}],execute:async(...args)=>{called=args;return{success:true,contentItems:[{type:'inputText',text:'当前资料内容'}]};}};
+ let conversation;const result=f.start({tools,conversation:{cwd:path.join(dir,'preview','conversations','test')},onConversation:value=>conversation=value});await flush();
+ assert.equal(f.calls.find(c=>c.method==='thread/start').params.dynamicTools.length,1);
+ previewAI.emit('approval',{id:44,method:'item/tool/call',params:{threadId:f.threadId,turnId:f.turnId,tool:'read_current',arguments:{},callId:'receipt'}});await flush();assert.deepEqual(called,['read_current',{},'receipt']);assert.equal(responses[0].value.success,true);
+ previewAI.emit('approval',{id:45,method:'item/tool/call',params:{threadId:'another-account',turnId:f.turnId,tool:'read_current',arguments:{},callId:'wrong'}});assert.equal(responses[1].value.success,false);
+ f.item();await result;f.complete('completed');assert.equal(conversation.threadId,f.threadId);
+ const request=previewAI.request;previewAI.request=async(method,params)=>method==='thread/resume'?(f.calls.push({method,params}),{thread:{id:f.threadId}}):request(method,params);
+ const next=f.start({tools,conversation});await flush();assert.equal(f.calls.filter(c=>c.method==='thread/start').length,1);assert.equal(f.calls.filter(c=>c.method==='thread/resume').length,1);f.item();await next;f.complete('completed');
+});
 test('中间进度和未完整JSON不提前交付，完整commentary触发一次正式提交修复',async t=>{
  const f=fixture(t);let settled=false;const result=f.start().then(v=>{settled=true;return v;});await flush();
  f.item('正在搜索公开资料','commentary');f.item('{"answer":"未结束"','commentary');await flush();assert.equal(settled,false);assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,0);
