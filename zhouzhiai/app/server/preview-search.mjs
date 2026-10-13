@@ -46,7 +46,7 @@ export function assistantResult(text,schema,guard){
   return {output:guard(output),sources:normalizeSources(value.sources??value.references)};
 }
 export function formatError(){return Object.assign(new Error('答复格式未能整理完成，请重试'),{code:'AI_RESULT_FORMAT'});}
-export function publicAssistantJob(job){const {searchReferences:_,checkpoint:_c,priorOutputIds:_p,...publicJob}=job;return publicJob;}
+export function publicAssistantJob(job){const {searchReferences:_,checkpoint:_c,priorOutputIds:_p,analysisMode:_a,...publicJob}=job;return publicJob;}
 export function conversationReferences(jobs,sessionId){
   return jobs.filter(job=>job.sessionId===sessionId&&job.status==='completed'&&job.searchReferences?.length).slice(-3).map(job=>({task:job.message,references:normalizeSources(job.searchReferences)}));
 }

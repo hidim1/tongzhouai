@@ -26,6 +26,7 @@ test('Word原生标题、加粗、编号和表格；Markdown不重复标题或�
  await makeDocument('工作进展.docx',body,doc);await makeMarkdown('工作进展.md',body,md);
  const html=(await mammoth.convertToHtml({path:doc})).value;assert.match(html,/<h1>待办<\/h1>|<h2>待办<\/h2>/);assert.match(html,/<strong>已完成。<\/strong>/);assert.match(html,/<ol>/);assert.match(html,/<table>/);assert.doesNotMatch(html,/\*\*|<script>|不可执行|\.docx/);assert.equal((html.match(/工作进展/g)||[]).length,1);
  const text=fs.readFileSync(md,'utf8');assert.equal(text.match(/^# 工作进展$/gm).length,1);assert.doesNotMatch(text,/通用输出|编制说明|&#x/);assert.match(text,/\|.*全量物料库/);
+ const wide=path.join(d,'wide.docx');await makeDocument('宽表核对','| A | B | C | D | E |\n|---|---|---|---|---|\n|甲|乙|丙|丁|戊|',wide,{readableLayout:true});const {officePackage}=await import('../server/office-package.mjs'),xml=await(await officePackage(wide)).file('word/document.xml').async('string');assert.match(xml,/<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/);assert.match(xml,/w:tblW w:type="dxa" w:w="13958"|w:tblW w:w="13958" w:type="dxa"/);
 });
 test('Excel保留类型、零与空、编号前导零、行数、列宽、冻结和打印；原有预算金额不变',async t=>{
  const d=dir(t),target=path.join(d,'data.xlsx'),data={sheets:[{name:'采购清单',columns:[{label:'编号',kind:'text'},{label:'物料名称和规格',kind:'text'},{label:'数量',kind:'number'},{label:'金额',kind:'currency'},{label:'日期',kind:'date'}],rows:[['0007','卫生级过滤组件及其配套密封件',2,1500,'2026-10-12'],['0008','待定物料',null,0,null]]}]};

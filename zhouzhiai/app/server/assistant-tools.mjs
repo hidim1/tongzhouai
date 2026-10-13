@@ -10,12 +10,20 @@ import {tableStats} from './assistant-table.mjs';
 import {preferenceStore} from './assistant-preferences.mjs';
 import {matchesOutputSchema} from './preview-result.mjs';
 import {publicError} from './member-policy.mjs';
+import {taskStepSchema,taskPlan,updateTaskPlan} from './assistant-workflow.mjs';
+import {compareTables} from './assistant-table-compare.mjs';
 
 const str={type:'string'},integer={type:'integer'},obj=properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});
 const tool=(name,description,inputSchema)=>({type:'function',name,description,inputSchema});
+function evidenceSummary(name,value,args){
+ const read=['zhouzhi_read_file','zhouzhi_read_draft'].includes(name);const v=read?{id:value.id,name:value.name,offset:value.offset,end:value.end,totalCharacters:value.totalCharacters,nextOffset:value.nextOffset}:value??{visualPage:args.page||1};
+ const text=JSON.stringify(v);return text.length>3000?JSON.stringify({preview:text.slice(0,2400),truncated:true}):text;
+}
 const replacementsSchema={type:'array',items:obj({part:str,find:str,replace:str})};
 const cellsSchema={type:'array',items:obj({sheet:str,address:str,value:{type:['string','number','boolean','null']}})};
 export const assistantTools=[
+ tool('zhouzhi_task_plan','保存或读取当前任务的步骤和验收条件，仅后台使用。action为read时steps为空；update时提供全部自定义步骤，不包含系统保留的request步骤。不能改变原任务目标。完成状态必须引用本任务成功工具返回的evidenceId。',obj({action:{type:'string',enum:['read','update']},steps:{type:'array',maxItems:20,items:taskStepSchema}})),
+ tool('zhouzhi_read_draft','分页读取本任务尚未交付的文件规划完整JSON，包含全部正文、行和页面，用于验收而非只看样本。index为0开始文件序号。这只是规划，不能据此声称文件已经制作。',obj({index:integer,offset:integer,limit:integer})),
  tool('zhouzhi_list_files','列出当前任务获准使用的资料及当前对话历史成果，返回可读取的ID，不访问其他对话。',obj({})),
  tool('zhouzhi_read_file','按字符范围读取资料正文。长文件可以一直读取到nextOffset为空。',obj({id:str,offset:integer,limit:integer})),
  tool('zhouzhi_search_files','在获准使用的全部资料正文中检索原文位置，再用read_file读取上下文。',obj({query:str,limit:integer})),
@@ -25,6 +33,7 @@ export const assistantTools=[
  tool('zhouzhi_calculate','可靠数值计算，支持四则运算、幂、SUM/MIN/MAX/AVG/ABS/ROUND；不运行代码，不推测缺失输入。',obj({expression:str})),
  tool('zhouzhi_preference','仅用户本轮明确要求记住或忘记时，保存或清除账号范围内的表达偏好，不保存业务事实、凭据或敏感资料。key为voice/length/documentStyle，清除时value为空。',obj({key:{type:'string',enum:['voice','length','documentStyle']},value:str})),
  tool('zhouzhi_table_stats','对指定Excel工作表全部已解析记录做统计，不抽样。列用A/B等字母，startRow指定首个数据行。groupColumn为空表示不分组，返回数值、缺失和非数值记录数，不把未知当零。',obj({id:str,sheet:str,valueColumn:str,groupColumn:str,startRow:integer,offset:integer,limit:integer,operation:{type:'string',enum:['sum','average','min','max','count']}})),
+ tool('zhouzhi_compare_tables','按明确业务键对比两张Excel工作表记录及数值差额，可跨本轮获准文件。使用列字母和明确数据行范围，endRow=0表示末尾；须识别并排除小计合计行，不能双重计数。重复键、单侧记录、未知数值分别报告，不把未知当零。返回分页明细及全量指定范围的汇总。',obj({leftId:str,rightId:str,leftSheet:str,rightSheet:str,leftKeyColumn:str,rightKeyColumn:str,leftValueColumn:str,rightValueColumn:str,leftStartRow:integer,rightStartRow:integer,leftEndRow:integer,rightEndRow:integer,offset:integer,limit:integer})),
  tool('zhouzhi_view_page','查看获准PDF、Word、Excel或PPT的真实页面。page从1开始，返回该页图像及总页数，不读取任意路径。',obj({id:str,page:integer})),
  tool('zhouzhi_edit_file','仅在用户本轮要求修改对应格式文件时使用。保留原件、版式和未修改内容，另存新版本并检查。Word/PPT/Markdown用唯一原文替换，PPT part为slide:0等0开始页面；Excel按sheet和address修改已有单元格。不改结构、不执行代码；不支持的复杂对象明确失败。成功后成果已经生成，最终files不要重复生成同一文件。',obj({id:str,title:str,replacements:replacementsSchema,cells:cellsSchema})),
 ];
@@ -45,15 +54,19 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
   const spec=assistantTools.find(t=>t.name===name);if(!spec||!matchesOutputSchema(args,spec.inputSchema))return {success:false,contentItems:text({error:'工具或参数无效'})};
   // Read-only tools may run concurrently; receipt IDs are scoped to this job.
   try{let value,contentItems;
-   if(name==='zhouzhi_list_files')value=(await all()).map(f=>({id:f.id,name:f.name,status:f.status,textCharacters:(f.text||'').length,sheets:f.sheets?.map(s=>s.name),slides:f.slides?.length,tables:f.tables?.length,image:/\.(png|jpe?g)$/i.test(f.name)}));
+   if(name==='zhouzhi_task_plan'){value=args.action==='read'?taskPlan(job):updateTaskPlan(job,args.steps,permitted().map(f=>f.id));}
+   else if(name==='zhouzhi_read_draft'){const draft=checkpoint.analysisDraft?.files?.[args.index];if(!Number.isSafeInteger(args.index)||args.index<0||!draft)throw Error('本任务没有指定的文件草稿');value=filePage({id:'draft:'+args.index,name:draft.title,text:JSON.stringify(draft)},args);}
+   else if(name==='zhouzhi_list_files')value=(await all()).map(f=>({id:f.id,name:f.name,status:f.status,textCharacters:(f.text||'').length,sheets:f.sheets?.map(s=>s.name),slides:f.slides?.length,tables:f.tables?.length,image:/\.(png|jpe?g)$/i.test(f.name)}));
    else if(name==='zhouzhi_read_file'){const file=await get(args.id);value=filePage(file,args);markRead(checkpoint,file.id,value.offset,value.end,value.totalCharacters);}
    else if(name==='zhouzhi_search_files')value=searchFiles(await all(),args);
    else if(name==='zhouzhi_history')value=historyPage(session.messages,args);
    else if(name==='zhouzhi_calculate')value=calculate(args.expression);
    else if(name==='zhouzhi_preference')value=preferenceStore(DATA).update(job.message,args);
    else if(name==='zhouzhi_table_stats'){const file=await get(args.id),sheet=file.sheets?.find(s=>s.name===args.sheet);if(!sheet)throw Error('工作表不存在或未能解析');value=tableStats(sheet,args);}
+   else if(name==='zhouzhi_compare_tables'){const left=(await get(args.leftId)).sheets?.find(s=>s.name===args.leftSheet),right=(await get(args.rightId)).sheets?.find(s=>s.name===args.rightSheet);if(!left||!right)throw Error('指定工作表不存在或未能解析');value=compareTables(left,right,args);}
    else if(name==='zhouzhi_view_page'){
     const file=await get(args.id);if(!Number.isSafeInteger(args.page)||args.page<1)throw Error('页码无效');if(!previews.has(file.id))previews.set(file.id,renderOffice(file.path,path.join(DATA,'preview','page-read',job.id,file.id),{cancelled}));const rendered=await previews.get(file.id);if(args.page>rendered.pages.length)throw Error('指定页码不存在');
+    const coverage=(checkpoint.pageCoverage??={})[file.id]??={total:rendered.pages.length,pages:[]};if(!coverage.pages.includes(args.page))coverage.pages.push(args.page);coverage.complete=coverage.pages.length===coverage.total;
     contentItems=[...text({id:file.id,page:args.page,totalPages:rendered.pages.length}),{type:'inputImage',imageUrl:'data:image/png;base64,'+fs.readFileSync(rendered.pages[args.page-1]).toString('base64')}];
    }
    else if(name==='zhouzhi_edit_file'){
@@ -68,6 +81,7 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
    else if(name==='zhouzhi_view_image'){
     const file=await get(args.id);if(!/\.(png|jpe?g)$/i.test(file.name))throw Error('该资料不是图片');const bytes=fs.readFileSync(file.path);if(bytes.length>12*1024*1024)throw Error('图片过大，请上传压缩后的图片');
     contentItems=[{type:'inputImage',imageUrl:'data:image/'+(/\.png$/i.test(file.name)?'png':'jpeg')+';base64,'+bytes.toString('base64')}];
+    (checkpoint.pageCoverage??={})[file.id]={total:1,pages:[1],complete:true};
    }else if(name==='zhouzhi_structure'){
     const f=await get(args.id);if(!Number.isSafeInteger(args.offset)||args.offset<0||!Number.isSafeInteger(args.limit)||args.limit<1||args.limit>100)throw Error('读取范围无效');
     const parts=[...(f.sheets||[]).map(s=>({id:'sheet:'+s.name,name:s.name,items:s.rows})),...(f.tables||[]).map((r,i)=>({id:'table:'+i,items:r})),...(f.slides||[]).map((s,i)=>({id:'slide:'+i,items:s.elements||[],...s}))];
@@ -75,7 +89,9 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
     else{const p=parts.find(p=>p.id===args.part);if(!p)throw Error('指定页面或表格不存在');value={id:p.id,total:p.items.length,items:p.items.slice(args.offset,args.offset+args.limit),nextOffset:args.offset+args.limit<p.items.length?args.offset+args.limit:null};}
    }
    if(job.status!=='running')throw Error('任务已停止');
-   receipts.push({callId,tool:name,completedAt:new Date().toISOString(),...(args.id?{fileId:args.id}:{})});save();return {success:true,contentItems:contentItems||text(value)};
+   const evidenceId='e'+receipts.length+'-'+createHash('sha256').update(String(callId)+name+JSON.stringify(args)).digest('hex').slice(0,8);
+   receipts.push({callId,evidenceId,tool:name,completedAt:new Date().toISOString(),arguments:args,...(args.id?{fileId:args.id}:{}),summary:evidenceSummary(name,value,args)});save();
+   return {success:true,contentItems:contentItems?[...text({evidenceId}),...contentItems]:text(Array.isArray(value)?{evidenceId,items:value}:{...value,evidenceId})};
   }catch(error){receipts.push({callId,tool:name,failed:true,completedAt:new Date().toISOString(),error:publicError(error.message)});save();return {success:false,contentItems:text({error:publicError(error.message)})};}
  }
  return {definitions:assistantTools,execute};

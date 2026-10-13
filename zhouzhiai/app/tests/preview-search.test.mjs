@@ -34,6 +34,6 @@ test('联网仅对通用任务单独开启，工程线程禁用；网页与隐�
  assert.doesNotMatch(threads[0].developerInstructions,/不要访问网络/);
  assert.match(threads[1].developerInstructions,/不要访问网络/);
  const routes=fs.readFileSync(new URL('../server/preview-assistant.mjs',import.meta.url),'utf8');
- assert.equal((routes.match(/allowWebSearch:true/g)||[]).length,1);
+ assert.equal((routes.match(/allowWebSearch:allowTaskSearch\(j.message\)/g)||[]).length,1);
  assert.ok(routes.includes("j.type==='general'"));
 });

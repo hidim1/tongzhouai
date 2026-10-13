@@ -55,6 +55,10 @@ test('中间进度和未完整JSON不提前交付，完整commentary触发一次
  const steering=f.calls.filter(c=>c.method==='turn/steer');assert.equal(steering.length,1);assert.equal(steering[0].params.expectedTurnId,f.turnId);assert.match(steering[0].params.input[0].text,/final_answer/);
  f.item();assert.deepEqual(await result,valid);f.complete('completed');
 });
+test('工具定义升级才迁移原生会话，保留应用历史可访问，不复用过期定义',async t=>{
+ const f=fixture(t);let conversation;const tools={definitions:[{name:'read_v1'}],execute(){}};const result=f.start({tools,conversation:{cwd:path.join(dir,'preview','conversations','migration')},onConversation:value=>conversation=value});await flush();f.item();await result;f.complete('completed');assert.ok(conversation.toolsSignature);
+ const next=f.start({tools:{...tools,definitions:[{name:'read_v2'}]},conversation});await flush();assert.equal(f.calls.filter(c=>c.method==='thread/start').length,2);assert.equal(f.calls.filter(c=>c.method==='thread/resume').length,0);f.item();await next;f.complete('completed');
+});
 test('正式结果结束事件丢失时只清理已交付的线程，不继续空等',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);const result=f.start();await flush();f.item();await result;t.mock.timers.tick(5001);await flush();
  assert.deepEqual(f.calls.filter(c=>c.method==='interrupt').map(c=>c.params),[[f.threadId,f.turnId]]);
@@ -122,7 +126,7 @@ test('结构校验拒绝多余字段、类型错误和继承属性',()=>{
 test('只有智能工作助理取消固定时限，页面进度与手动停止保留',()=>{
  const routes=fs.readFileSync(new URL('../server/preview-assistant.mjs',import.meta.url),'utf8');
  assert.equal((routes.match(/timeoutMs:0/g)||[]).length,1);
- assert.match(routes,/allowWebSearch:true,timeoutMs:0,completeOnFinal:true,onPhase:/);
+ assert.match(routes,/allowWebSearch:allowTaskSearch\(j.message\),timeoutMs:0,completeOnFinal:true,onPhase:/);
  const view=fs.readFileSync(new URL('../src/Preview.tsx',import.meta.url),'utf8');
  assert.match(view,/generalProgress/);assert.match(view,/思考中…/);assert.match(view,/onStop=\{\(\)=>void stopGeneral\(\)\}/);
  const controls=fs.readFileSync(new URL('../src/AssistantControls.tsx',import.meta.url),'utf8');

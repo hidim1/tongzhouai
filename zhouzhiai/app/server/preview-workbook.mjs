@@ -30,7 +30,7 @@ export function workbookSheets(columns,rows,extraSheets=[],plan=null){
   return{...s,rows:s.rows.map(r=>{if(!Array.isArray(r)||r.length!==s.columns.length)throw Error('Excel数据与表头列数不一致，不能省略字段');return r.map((v,i)=>valueFor(v,s.columns[i].kind));})};
  });
 }
-export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[],plan=null,engineering=false}={}){
+export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[],plan=null,engineering=false,readableLayout=false}={}){
  title=String(title||'').trim().replace(/\.(docx|xlsx|pptx|md)$/i,'');
  const sheets=workbookSheets(columns,rows,extraSheets,plan),wb=new ExcelJS.Workbook();wb.creator='舟知';wb.title=title;
  for(const [si,s] of sheets.entries()){
@@ -41,19 +41,20 @@ export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[
   sheet.views=[{state:'frozen',ySplit:header,xSplit:s.columns.length>6?1:0,showGridLines:false}];sheet.autoFilter={from:{row:header,column:1},to:{row:header+s.rows.length,column:s.columns.length}};
   const formats={number:'#,##0.00',currency:'"¥"#,##0.00',percentage:'0.0%',date:'yyyy-mm-dd',text:'@'};
   for(const [i,c] of s.columns.entries()){
-   const width=Math.min(54,Math.max(12,length(c.label)+4,...s.rows.map(r=>Math.min(50,length(r[i] instanceof Date?'2026-10-12':r[i])+2))));sheet.getColumn(i+1).width=width;
+   const width=Math.min(readableLayout?18:54,Math.max(12,length(c.label)+4,...s.rows.map(r=>Math.min(50,length(r[i] instanceof Date?'2026-10-12':r[i])+2))));sheet.getColumn(i+1).width=width;
    if(formats[c.kind])sheet.getColumn(i+1).numFmt=c.kind==='number'&&s.rows.every(r=>r[i]===null||typeof r[i]==='string'||Number.isInteger(r[i]))?'#,##0':formats[c.kind];
   }
   for(let row=header;row<=header+s.rows.length;row++){
    let lines=1;sheet.getRow(row).eachCell({includeEmpty:true},(cell,col)=>{
-    cell.font={name:'Microsoft YaHei',size:11,color:{argb:row===header?'FFFFFFFF':'FF233A48'},bold:row===header};
+    cell.font={name:'Microsoft YaHei',size:readableLayout?12:11,color:{argb:row===header?'FFFFFFFF':'FF233A48'},bold:row===header};
     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:row===header?'FF24495D':row%2?'FFFFFFFF':'FFF3F6F8'}};
     cell.alignment={vertical:'middle',horizontal:row===header||cell.value instanceof Date?'center':typeof cell.value==='number'?'right':'left',wrapText:true};
     cell.border=row===header?{bottom:{style:'thin',color:{argb:'FFDCE5EB'}}}:{};
     lines=Math.max(lines,...String(cell.value instanceof Date?'2026-10-12':cell.value??'').split('\n').map(t=>Math.ceil(length(t)/(sheet.getColumn(col).width-2))));
-   });sheet.getRow(row).height=Math.max(row===header?30:24,lines*17+8);
+   });const height=Math.max(row===header?30:24,lines*(readableLayout?21:17)+(readableLayout?12:8));if(readableLayout&&height>409)throw Error('单元格长文超过可读行高，请拆分内容或使用Word交付');sheet.getRow(row).height=height;
   }
   sheet.pageSetup={orientation:s.columns.length>5?'landscape':'portrait',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:`${header}:${header}`,printArea:`A${engineering?1:2}:${sheet.getColumn(s.columns.length).letter}${header+s.rows.length}`};
+  if(readableLayout){const totalWidth=s.columns.reduce((n,_,i)=>n+sheet.getColumn(i+1).width,0);sheet.pageSetup={...sheet.pageSetup,orientation:totalWidth>80?'landscape':'portrait',paperSize:totalWidth>140?8:9,fitToPage:true,fitToWidth:1,fitToHeight:0};}
  }
  // Only substantive notes, not an automatic extra "编制说明" worksheet.
  if(body?.trim()){
