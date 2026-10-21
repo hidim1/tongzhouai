@@ -254,3 +254,5 @@
   .zh-assistant-page .zh-composer > div > span { display: none; }
   .zh-assistant-page .zh-welcome { margin: 15px 4px; }
 }
+.zh-task-question{margin:12px 0;padding:14px 16px;border:1px solid #b5d7e8;border-radius:12px;background:#f1f8fc;color:#20485d}
+.zh-task-question p{margin:6px 0 8px;font-size:13px;line-height:1.6}

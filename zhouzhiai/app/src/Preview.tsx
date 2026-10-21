@@ -4,6 +4,7 @@ import {MembraneWorkspace} from './MembraneWorkspace';
 import {AssistantText} from './AssistantText';
 import {AssistantQueue} from './AssistantQueue';
 import {AssistantControls} from './AssistantControls';
+import {AssistantTaskStatus} from './AssistantTaskStatus';
 import {SoftScrollArea} from './SoftScrollArea';
 import {composerAction,elapsedLabel} from './assistant-input';
 import './preview.css';
@@ -24,9 +25,11 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
  const generalJobs=state?.jobs.filter((j:any)=>j.sessionId===sessionId)||[],assemblyJobs=state?.jobs.filter((j:any)=>j.projectId===projectId)||[];
  const generalRunning=generalJobs.some((j:any)=>j.status==='running'),assemblyRunning=assemblyJobs.some((j:any)=>j.status==='running');
  const currentGeneralJob=generalJobs.find((j:any)=>j.status==='running');
+ const waitingGeneralJob=generalJobs.find((j:any)=>j.status==='waiting_user');
+ const latestGeneralJob=waitingGeneralJob||generalJobs.filter((j:any)=>j.status!=='queued').at(-1);
  const generalProgress=currentGeneralJob?elapsedLabel(currentGeneralJob.startedAt||currentGeneralJob.createdAt):'';
  const queuedMessages=generalJobs.filter((j:any)=>j.status==='queued');
- useEffect(()=>{const panel=bottom.current?.parentElement,key=nav+sessionId;if(lastView.current!==key){follow.current=true;lastView.current=key;}if(follow.current)panel?.scrollTo({top:panel.scrollHeight,behavior:'smooth'});},[sessionId,nav,session?.messages.length,generalRunning,currentGeneralJob?.answerUpdates?.length]);
+ useEffect(()=>{const panel=bottom.current?.parentElement,key=nav+sessionId;if(lastView.current!==key){follow.current=true;lastView.current=key;}if(follow.current)panel?.scrollTo({top:panel.scrollHeight,behavior:'smooth'});},[sessionId,nav,session?.messages.length,generalRunning,waitingGeneralJob?.id,currentGeneralJob?.answerUpdates?.length]);
  useEffect(()=>{window.scrollTo({top:0});},[nav,projectId]);
  useEffect(()=>{if(boot&&nav==='members'&&!(boot.role==='admin'&&boot.adminMembersEnabled&&MembersView))setNav('assistant');},[boot,nav,MembersView]);
  const newSession=async()=>{const s=await request('/preview/sessions',{});currentSession.current=s.id;setSessionId(s.id);return s;};
@@ -69,9 +72,9 @@ export function Preview({SettingsView:PreviewSettings,MembersView}:any={}){
    </article>)}
    {generalRunning&&currentGeneralJob?.answerUpdates?.map((update:any,i:number)=><article className="zh-message assistant" key={currentGeneralJob.id+'-update-'+i}><small>舟知</small><AssistantText text={update.text}/></article>)}
    {generalRunning&&<div className="zh-waiting"><small>舟知</small><div><span className="zh-wait-status" role="status"><span className="zh-thinking-dots" aria-hidden="true"><i/><i/><i/></span>思考中…</span><span className="zh-wait-time">{generalProgress}</span></div></div>}
-   {generalJobs.filter((j:any)=>j.status!=='queued').slice(-1).filter((j:any)=>j.status==='failed').map((j:any)=><div className="zh-inline-error" key={j.id}>{j.needsInput?'这部分还需要补充：':'上次执行未成功：'}{j.error}{j.canResume&&<button className="zh-link" disabled={busy||generalRunning} onClick={()=>void perform(()=>request(`/preview/jobs/${j.id}/continue`,{}))}>继续处理</button>}</div>)}<div ref={bottom}/>
+   <AssistantTaskStatus job={latestGeneralJob} busy={busy||generalRunning} onCancel={id=>void perform(()=>request(`/preview/jobs/${id}/cancel`,{}))} onContinue={id=>void perform(()=>request(`/preview/jobs/${id}/continue`,{}))}/><div ref={bottom}/>
   </SoftScrollArea>
-  <AssistantQueue items={queuedMessages} running={generalRunning} busy={busy} onEdit={(id:string,message:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{message},'PATCH'))} onRemove={(id:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{},'DELETE'))} onResume={()=>perform(()=>request(`/preview/sessions/${sessionId}/queue/resume`,{}))}/>
+  <AssistantQueue items={queuedMessages} running={generalRunning||!!waitingGeneralJob} busy={busy} onEdit={(id:string,message:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{message},'PATCH'))} onRemove={(id:string)=>perform(()=>request(`/preview/sessions/${sessionId}/queue/${id}`,{},'DELETE'))} onResume={()=>perform(()=>request(`/preview/sessions/${sessionId}/queue/resume`,{}))}/>
   <div className="zh-composer"><textarea aria-label="通用工作任务" aria-describedby="zh-composer-hint" placeholder="说说你想处理的事，或上传资料…" value={text} maxLength={12000} onChange={e=>{setText(e.target.value);setNotice({sessionId:'',text:''});}} onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;compositionEnded.current=Date.now();}} onKeyDown={e=>{
    const action=composerAction({...e,keyCode:e.nativeEvent.keyCode,isComposing:e.nativeEvent.isComposing},generalRunning,composing.current||Date.now()-compositionEnded.current<80);
    if(action){e.preventDefault();void send(action);}

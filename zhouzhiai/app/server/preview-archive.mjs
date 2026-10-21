@@ -1,4 +1,4 @@
-const activeStatuses = new Set(['running', 'queued', 'approval', 'awaiting_approval']);
+const activeStatuses = new Set(['running', 'queued', 'waiting_user', 'approval', 'awaiting_approval']);
 export function archiveItem(item, jobs, images = [], versions = []) {
   if (!item || item.archivedAt) throw Object.assign(new Error('记录不存在或已删除'), { status: 404 });
   const running = jobs.some(j => (j.sessionId === item.id || j.projectId === item.id) && activeStatuses.has(j.status));

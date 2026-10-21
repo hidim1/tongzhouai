@@ -8,7 +8,7 @@ import { store, getProject, projectDir, uid, save as saveWorkspace } from './sto
 import { ingest } from './intake.mjs';
 import { extractDocument } from './documents.mjs';
 import { templates, candidates, templateCatalog, selectedModules, expandAssembly, validatePlan, demoPlan, procurementSubtotal, actions } from './preview-core.mjs';
-import { askAI, groupedAssemblySchema, selectionSchema, cancelAI,steerAI } from './preview-ai.mjs';
+import { askAI, groupedAssemblySchema, selectionSchema, cancelAI,pauseAI,steerAI } from './preview-ai.mjs';
 import {createAssistant} from './preview-assistant.mjs';
 import {publicAssistantJob} from './preview-search.mjs';
 import { makePresentation, presentationInstructions } from './preview-presentation.mjs';
@@ -23,19 +23,14 @@ import {reviewPresentation,repairPresentationLayout} from './preview-presentatio
 import {publicAssistantSession} from './assistant-context.mjs';
 import {reviewOffice,buildReviewedOffice} from './office-render.mjs';
 import {verifyOfficeContent} from './office-content.mjs';
+import {recoverInterruptedTasks} from './assistant-startup.mjs';
 
 const dir = path.join(DATA,'preview');
 fs.mkdirSync(dir,{recursive:true});
 const dbPath = path.join(dir,'preview.json');
 const db = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath)) : {sessions:[],jobs:[],versions:[],images:[]};
-export const hasPreviewWork = () => [...db.jobs,...db.images].some(j=>['running','queued','approval','awaiting_approval'].includes(j.status));
-for (const j of [...db.jobs,...db.images]) if (['running','queued'].includes(j.status)) {
-  if(j.type==='general'){
-    const s=db.sessions.find(s=>s.id===j.sessionId);if(s)s.queuePaused=true;
-    if(j.status==='queued')continue; // Retain pending messages; resume only by user action.
-  }
-  j.status='failed';j.error='服务重启，请重试';if(j.type==='general'&&j.checkpoint)j.canResume=true;
-}
+export const hasPreviewWork = () => [...db.jobs,...db.images].some(j=>['running','queued','waiting_user','approval','awaiting_approval'].includes(j.status));
+recoverInterruptedTasks(db);
 for(const j of db.jobs)for(const f of j.files||[])f.name=f.name.replace(/\.(xlsx|docx|md)\.\1$/i,'.$1');
 for(const s of db.sessions)for(const m of s.messages)for(const f of m.files||[])f.name=f.name.replace(/\.(xlsx|docx|md)\.\1$/i,'.$1');
 function save() {fs.writeFileSync(dbPath+'.tmp',JSON.stringify(db));fs.renameSync(dbPath+'.tmp',dbPath);}
@@ -87,7 +82,7 @@ const imageInputs=files=>files.map(imagePath).filter(Boolean).slice(0,3);
 const fileContext = files => files.map(f=>({id:f.id,name:f.name,status:f.status,imageAttached:!!imagePath(f)&&imageInputs(files).includes(imagePath(f)),note:(f.parseNote||f.error||f.cadNote||'')+((f.text||'').length>30000?' 本文件文本超过本轮30000字符范围，未读取全部；不得宣称完整分析。':''),text:(f.text||'').slice(0,30000)}));
 export function installPreview(app) {
   installWorkflow(app,{db,save,runBridge,askAI,artifact,fileContext,imageInputs});
-  const assistant=createAssistant({db,save,askAI,steerAI,cancelAI,artifact,fileContext,imageInputs,extractDocument});
+  const assistant=createAssistant({db,save,askAI,steerAI,cancelAI,pauseAI,artifact,fileContext,imageInputs,extractDocument});
   const publicArtifact=({path:_,...f})=>f;
   app.get('/api/preview/state',(req,res)=>{
     const hidden=new Set([...db.sessions,...store.projects].filter(x=>x.archivedAt).map(x=>x.id));

@@ -9,6 +9,7 @@ reference_materials/
 *.zip
 .DS_Store
 vendor/
+/output/
 app/docs/screenshots/
 app/docs/protocol/
 app/docs/IMPLEMENTATION.md

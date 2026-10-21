@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zhouzhi-completion-test-'));
 process.env.TONGZHOU_DATA_DIR=dir;
-const {askAI,previewAI,generalSchema,cancelAI,steerAI}=await import('../server/preview-ai.mjs');
+const {askAI,previewAI,generalSchema,cancelAI,pauseAI,steerAI}=await import('../server/preview-ai.mjs');
 const {matchesOutputSchema}=await import('../server/preview-result.mjs');
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const valid={answer:'已完成资料整理。',files:[]};
@@ -157,4 +157,127 @@ test('一次格式纠正会保留已接受的用户引导，不重复联网',asy
  f.item({answer:42});await flush();await flush();
  const requests=f.calls.filter(c=>c.method==='turn/start');assert.equal(requests.length,2);assert.match(requests[1].params.input[0].text,/正文只写两句话/);
  f.item();await result;f.complete('completed');
+});
+
+test('空白恢复请求失败保留系统错误码，不吞错或等待用户补充',async t=>{
+ const f=fixture(t),request=previewAI.request;
+ previewAI.request=async(method,p)=>{if(method==='turn/steer')throw Error('no active turn');return request(method,p);};
+ const result=f.start(),rejected=assert.rejects(result,error=>error.code==='AI_RECOVERY_FAILED');await flush();
+ f.item('',null);await rejected;f.item();f.complete('completed');
+ assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+ assert.equal(await steerAI('test-'+seq,'迟到的补充'),false);
+});
+test('恢复引导回执属于其他回合时及时失败',async t=>{
+ const f=fixture(t),request=previewAI.request;
+ previewAI.request=async(method,p)=>method==='turn/steer'?{turnId:'another-turn'}:request(method,p);
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_RECOVERY_FAILED'});await flush();f.item(valid,'commentary');await rejected;
+});
+test('正式结果已到达后迟到的恢复拒绝不会推翻交付',async t=>{
+ const f=fixture(t),request=previewAI.request;let failSteer;
+ previewAI.request=async(method,p)=>method==='turn/steer'?new Promise((_,reject)=>failSteer=reject):request(method,p);
+ const result=f.start();await flush();f.item('',null);await flush();f.item();assert.deepEqual(await result,valid);
+ failSteer(Error('late failure'));await flush();f.complete('completed');assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
+});
+test('重复空白和缺失收尾事件有恢复上限，不重置等待期限',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_EMPTY_RESPONSE'});await flush();f.item('',null);await flush();
+ t.mock.timers.tick(60000);f.item('',null);t.mock.timers.tick(30001);await rejected;
+ assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,1);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+ f.item();f.complete('completed');t.mock.timers.tick(90001);await flush();assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+});
+test('空白final_answer同样进入有限恢复，不能无限等待',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_EMPTY_RESPONSE'});await flush();f.item('','final_answer');await flush();
+ assert.equal(f.calls.filter(c=>c.method==='turn/steer').length,1);t.mock.timers.tick(90001);await rejected;
+});
+test('完整commentary未正式交付时超时失败，不冒充最终结果',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_FINALIZATION_TIMEOUT'});await flush();f.item(valid,'commentary');await flush();
+ t.mock.timers.tick(90001);await rejected;assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);
+});
+test('恢复等待暂停于实际检索，超过八分钟的工具任务不会被收尾计时器中止',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);let settled=false;
+ const result=f.start().then(value=>{settled=true;return value;});await flush();
+ f.emit('item/started',{item:{id:'search-1',type:'webSearch'}});f.item('',null);await flush();
+ t.mock.timers.tick(900000);await flush();assert.equal(settled,false);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
+ f.emit('item/completed',{item:{id:'search-1',type:'webSearch'}});t.mock.timers.tick(89999);await flush();assert.equal(settled,false);
+ f.item();assert.deepEqual(await result,valid);f.complete('completed');
+});
+test('动态资料工具没有原生started事件也可暂停恢复等待，完成后重新计时',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t),respond=previewAI.respond;previewAI.respond=()=>{};t.after(()=>previewAI.respond=respond);
+ let finishTool;const tools={definitions:[{name:'read_slow'}],execute:()=>new Promise(resolve=>finishTool=resolve)};
+ const result=f.start({tools}),rejected=assert.rejects(result,{code:'AI_EMPTY_RESPONSE'});await flush();f.item('',null);
+ previewAI.emit('approval',{id:99,method:'item/tool/call',params:{threadId:f.threadId,turnId:f.turnId,tool:'read_slow',arguments:{},callId:'slow'}});await flush();
+ t.mock.timers.tick(900000);await flush();assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
+ finishTool({success:true,contentItems:[]});await flush();t.mock.timers.tick(90001);await rejected;
+});
+test('断线清理恢复看门狗并保留断线错误分类',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t),result=f.start(),rejected=assert.rejects(result,{code:'AI_DISCONNECTED'});
+ await flush();f.item('',null);previewAI.emit('disconnected',Error('连接断开'));await rejected;
+ const count=f.calls.filter(c=>c.method==='interrupt').length;t.mock.timers.tick(900001);await flush();assert.equal(f.calls.filter(c=>c.method==='interrupt').length,count);
+});
+test('取消恢复中的任务清理计时器与迟到回执',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t),request=previewAI.request;let acknowledge;
+ previewAI.request=async(method,p)=>method==='turn/steer'?new Promise(resolve=>acknowledge=resolve):request(method,p);
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_CANCELLED'});await flush();f.item('',null);await cancelAI('test-'+seq);await rejected;
+ acknowledge({turnId:f.turnId});t.mock.timers.tick(900001);await flush();assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+});
+test('服务端turn内嵌旧回合ID的迟到结束事件不结束当前任务',async t=>{
+ const f=fixture(t);let settled=false;const result=f.start().then(value=>{settled=true;return value;});await flush();
+ previewAI.emit('event',{method:'turn/completed',params:{threadId:f.threadId,turn:{id:'previous-turn',status:'completed'}}});
+ await flush();assert.equal(settled,false);f.item();await result;f.complete('completed');
+});
+test('中断回执丢失不能把已判定的失败重新挂起',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t);previewAI.interrupt=()=>new Promise(()=>{});
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_EMPTY_RESPONSE'});await flush();f.item('',null);await flush();
+ t.mock.timers.tick(90001);await flush();t.mock.timers.tick(5001);await rejected;
+});
+test('底层请求的机器可读错误码不会被脱敏包装丢弃',async t=>{
+ const f=fixture(t),request=previewAI.request;
+ previewAI.request=async(method,p)=>{if(method==='turn/start')throw Object.assign(Error('服务限流'),{code:'AI_PROVIDER_RATE_LIMIT'});return request(method,p);};
+ await assert.rejects(f.start(),{code:'AI_PROVIDER_RATE_LIMIT'});
+});
+test('正式结果早于启动回执时等待准确回合ID再清理，绝不发送空ID',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let unblock;const f=fixture(t,{startReply:new Promise(resolve=>unblock=resolve)});
+ const result=f.start();await flush();f.item();t.mock.timers.tick(10000);await flush();assert.equal(f.calls.filter(c=>c.method==='interrupt').length,0);
+ unblock();assert.deepEqual(await result,valid);t.mock.timers.tick(5001);await flush();
+ assert.deepEqual(f.calls.filter(c=>c.method==='interrupt').map(c=>c.params),[[f.threadId,f.turnId]]);
+});
+test('设置有限时限的通用任务也只中断一次',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});const f=fixture(t),result=f.start({timeoutMs:1000}),rejected=assert.rejects(result,{code:'AI_TASK_TIMEOUT'});
+ await flush();t.mock.timers.tick(1001);await rejected;assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+});
+test('启动回执未到时缓存并校验事件，迟到旧回合不能冒充当前结果',async t=>{
+ let unblock;const f=fixture(t,{startReply:new Promise(resolve=>unblock=resolve)});let settled=false;
+ const result=f.start().then(value=>{settled=true;return value;});await flush();
+ f.emit('item/completed',{turnId:'previous-turn',item:{type:'agentMessage',phase:'final_answer',text:JSON.stringify({answer:'旧结果',files:[]})}});
+ previewAI.emit('event',{method:'turn/completed',params:{threadId:f.threadId,turn:{id:'previous-turn',status:'completed'}}});
+ unblock();await flush();assert.equal(settled,false);f.item();assert.deepEqual(await result,valid);f.complete('completed');
+});
+test('必要问题暂停只停止当前attempt，回答后同job ID可继续',async t=>{
+ const f=fixture(t),result=f.start(),rejected=assert.rejects(result,{code:'AI_PAUSED'});await flush();await pauseAI('test-'+seq);await rejected;
+ const next=f.start();await flush();f.item();assert.deepEqual(await next,valid);f.complete('completed');
+ assert.equal(f.calls.filter(c=>c.method==='turn/start').length,2);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);
+});
+test('暂停等待启动回执和旧attempt收束，再允许同job继续',async t=>{
+ let unblock;const f=fixture(t,{startReply:new Promise(resolve=>unblock=resolve)});
+ const result=f.start(),rejected=assert.rejects(result,{code:'AI_PAUSED'});await flush();let paused=false;
+ const pause=pauseAI('test-'+seq).then(()=>paused=true);await flush();assert.equal(paused,false);
+ unblock();await pause;await rejected;assert.deepEqual(f.calls.filter(c=>c.method==='interrupt').map(c=>c.params),[[f.threadId,f.turnId]]);
+ const next=f.start();await flush();f.item();assert.deepEqual(await next,valid);f.complete('completed');
+});
+test('旧工具请求早于新回合回执时不能调用新attempt工具',async t=>{
+ let unblock;const f=fixture(t,{startReply:new Promise(resolve=>unblock=resolve)}),respond=previewAI.respond,responses=[];previewAI.respond=(id,result)=>responses.push({id,result});t.after(()=>previewAI.respond=respond);
+ let executions=0;const result=f.start({tools:{definitions:[{name:'read_current'}],execute:async()=>{executions++;return{success:true};}}});await flush();
+ previewAI.emit('approval',{id:101,method:'item/tool/call',params:{threadId:f.threadId,turnId:'old-turn',tool:'read_current',arguments:{},callId:'old'}});await flush();assert.equal(executions,0);
+ unblock();await flush();assert.equal(executions,0);assert.equal(responses[0].result.success,false);
+ f.item();await result;f.complete('completed');
+});
+test('暂停后的迟到工具结果不能向新attempt返回成功回执',async t=>{
+ const f=fixture(t),respond=previewAI.respond,responses=[];previewAI.respond=(id,result)=>responses.push({id,result});t.after(()=>previewAI.respond=respond);
+ let finish;const tools={definitions:[{name:'read_current'}],execute:()=>new Promise(resolve=>finish=resolve)};
+ const result=f.start({tools}),rejected=assert.rejects(result,{code:'AI_PAUSED'});await flush();
+ previewAI.emit('approval',{id:102,method:'item/tool/call',params:{threadId:f.threadId,turnId:f.turnId,tool:'read_current',arguments:{},callId:'old'}});await flush();
+ await pauseAI('test-'+seq);await rejected;const next=f.start();await flush();finish({success:true,contentItems:[]});await flush();
+ assert.equal(responses[0].result.success,false);f.item();assert.deepEqual(await next,valid);f.complete('completed');
 });

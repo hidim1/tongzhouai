@@ -2,7 +2,25 @@
 export function publicAssistantSession(session,cleanFile=f=>f){
  const {agentConversation:_,pendingClarification:_p,pendingRecovery:_r,...safe}=session;return {...safe,files:(safe.files||[]).map(cleanFile)};
 }
-export function recentHistory(messages,budget=40000){const recent=[];let length=0;for(const m of [...messages].reverse()){const item=JSON.stringify(m);if(length+item.length>budget)break;recent.unshift(m);length+=item.length;}return {totalMessages:messages.length,items:recent,olderHistoryAvailable:recent.length<messages.length};}
+export function recentHistory(messages,budget=40000){
+ if(!Number.isSafeInteger(budget)||budget<0)throw Error('历史上下文预算无效');
+ const recent=[];let length=2,truncated=false;
+ for(let index=messages.length-1;index>=0;index--){
+  const m=messages[index],separator=recent.length?1:0,size=JSON.stringify(m).length;
+  if(length+separator+size<=budget){recent.unshift(m);length+=separator+size;continue;}
+  // A single oversized answer must not erase all recent conversation context.
+  // Mark the excerpt explicitly; the history tool still exposes the full text.
+  const text=String(m.text||''),available=budget-length-separator;
+  const excerpt=count=>({role:m.role,text:text.slice(0,Math.ceil(count/2))+'\n[中间内容省略，请按消息序号读取完整历史]\n'+(count?text.slice(-Math.floor(count/2)||text.length):''),historyIndex:index,truncated:true,totalCharacters:text.length});
+  let low=0,high=text.length;
+  if(JSON.stringify(excerpt(0)).length<=available){
+   while(low<high){const mid=Math.ceil((low+high)/2);if(JSON.stringify(excerpt(mid)).length<=available)low=mid;else high=mid-1;}
+   recent.unshift(excerpt(low));truncated=true;
+  }
+  break;
+ }
+ return {totalMessages:messages.length,items:recent,olderHistoryAvailable:truncated||recent.length<messages.length};
+}
 export function historyPage(messages,{offset=0,limit=20,query=''}={}){
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1||limit>40)throw Error('读取范围无效');
  const rows=messages.map((m,index)=>({index,role:m.role,text:m.text,files:(m.files||[]).map(({id,name})=>({id,name}))}));

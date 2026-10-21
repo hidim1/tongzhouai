@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';import {createHash} from 'node:crypto';
 import {DATA} from './config.mjs';
+import {versionCatalog} from './assistant-versions.mjs';
+import {assertEditSource} from './assistant-source-scope.mjs';
 import {renderOffice,reviewOffice,recalculateOffice} from './office-render.mjs';
 import {editOffice} from './office-edit.mjs';
 import {assertPublicOutput} from './member-policy.mjs';
@@ -77,11 +79,11 @@ export const assistantTools=[
  tool('zhouzhi_edit_file','仅在用户本轮要求修改对应格式文件时使用。保留原件、版式和未修改内容，另存新版本并检查。Word/PPT/Markdown用唯一原文替换，PPT part为slide:0等0开始页面；Excel按sheet和address修改已有单元格。不改结构、不执行代码；不支持的复杂对象明确失败。成功后成果已经生成，最终files不要重复生成同一文件。',obj({id:str,title:str,replacements:replacementsSchema,cells:cellsSchema})),
 ];
 
-export function createAssistantTools({session,job,save,extractDocument,priorOutputs=[],askAI}){
+export function createAssistantTools({session,job,save,extractDocument,priorOutputs=[],askAI,isActive=()=>true}){
  const checkpoint=job.checkpoint??={version:1,stage:'analysis'},receipts=checkpoint.toolReceipts??=[];
  const outputs=()=>priorOutputs;
  const permitted=()=>[...session.files.filter(f=>(job.fileIds||[]).includes(f.id)),...outputs().filter(f=>job.priorOutputIds?.includes(f.id)),...(job.files||[])];
- const cached=new Map(),previews=new Map(),calculations=new Map(),toolCache=new Map();const cancelled=()=>job.status!=='running';
+ const cached=new Map(),previews=new Map(),calculations=new Map(),toolCache=new Map();const cancelled=()=>job.status!=='running'||!isActive();
  // Keep simple turns small while retaining history, math, memory and research.
  // Server authorization remains authoritative even when a tool is not exposed.
  const hasFiles=permitted().length>0,formats=job.deliveryFormats||[];
@@ -102,6 +104,7 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
   if(!(file.text!==undefined&&!file.error&&!file.unsupported&&!needsCellMetadata||!extractDocument)){
    if(!cached.has(id))cached.set(id,Promise.resolve(extractDocument(file.path)).then(parsed=>({...file,...parsed,error:parsed.error,status:parsed.error?'解析失败':parsed.unsupported?'待解析':parsed.text?'已提取文本':file.status})));parsed=await cached.get(id);
   }
+  if(cancelled())throw Error('已停止任务');
   const recognized=ocrText(file.ocr),unreadablePages=(parsed.scanPages||[]).filter(p=>!file.ocr?.pages?.[p]);
   const ocrSheets=Object.values(file.ocr?.pages||{}).flatMap(p=>p.tables.map((rows,i)=>({name:'识别第'+p.page+'页表'+(i+1),requiresConfirmation:p.uncertain.length>0,rows:rows.map((r,index)=>Object.fromEntries(r.map((v,col)=>{let c=col+1,name='';while(c){c--;name=String.fromCharCode(65+c%26)+name;c=Math.floor(c/26);}return[name+(index+1),v];})))})));
   return{...parsed,unreadablePages,...(recognized?{ocr:file.ocr,sheets:[...(parsed.sheets||[]),...ocrSheets],tables:[...(parsed.tables||[]),...Object.values(file.ocr.pages).flatMap(p=>p.tables)],text:(parsed.text||'')+'\n\n'+recognized,parseNote:(parsed.parseNote||'')+' 扫描页识别仅为转录，疑点须人工核对。'}:{})};
@@ -109,7 +112,7 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
  async function all(){return Promise.all(permitted().map(f=>get(f.id)));}
  const text=value=>[{type:'inputText',text:JSON.stringify(value)}];
  async function execute(name,args,callId){
-  if(job.status!=='running')return {success:false,contentItems:text({error:'任务已停止，不能继续读取'})};
+  if(cancelled())return {success:false,contentItems:text({error:'任务已停止，不能继续读取'})};
   const spec=definitions.find(t=>t.name===name);if(!spec||!matchesOutputSchema(args,spec.inputSchema))return {success:false,contentItems:text({error:'本轮工具不可用或参数无效'})};
   // Read-only tools may run concurrently; receipt IDs are scoped to this job.
   const started=performance.now();
@@ -134,16 +137,16 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
    else if(name==='zhouzhi_read_web_source'){
     if(!allowTaskSearch([job.message,...(job.guidance||[]).map(g=>g.message)].join('\n')))throw Error('用户本轮不允许联网');
     const url=sourceURL(args.url).href,sources=checkpoint.webSources??={};if(!sources[url]||sources[url].textVersion!==3&&job.analysisMode!=='audit'){
-     if(job.analysisMode==='audit')throw Error('验收只读已保存原文，不重新联网');if(!sources[url]&&Object.keys(sources).length>=20)throw Error('单任务原文页面较多，请先整理已有依据');const source=await readWebSource(url,{cancelled});sources[url]=source;if(source.url!==url)sources[source.url]=source;
+     if(job.analysisMode==='audit')throw Error('验收只读已保存原文，不重新联网');if(!sources[url]&&Object.keys(sources).length>=20)throw Error('单任务原文页面较多，请先整理已有依据');const source=await readWebSource(url,{cancelled});if(cancelled())throw Error('已停止任务');sources[url]=source;if(source.url!==url)sources[source.url]=source;
     }
     const source=sources[url];value={...filePage({id:'web',name:source.title,text:source.text},args),documentTitle:source.title,titleNote:'网页标题来自原页面标题信息，不保证正文中存在同样的标题。登记整段网页标题引文时，后台会与正文引文分开标注。',url:source.url,publishedAt:source.publishedAt,retrievedAt:source.retrievedAt,fingerprint:source.fingerprint};
    }
    else if(name==='zhouzhi_research_evidence'){value=args.action==='read'?researchSummary(checkpoint):registerClaims(checkpoint,args.claims);}
-   else if(name==='zhouzhi_versions')value=permitted().filter(f=>!args.query||f.name.includes(args.query)).map(f=>({id:f.id,name:f.name,createdAt:f.createdAt||null,version:f.version||1,parentId:f.parentId||null,changes:f.changes||[],note:f.createdAt?'':'旧文件没有精确生成时间，不能推断同名版本先后'}));
+   else if(name==='zhouzhi_versions')value=versionCatalog(permitted(),args.query);
    else if(name==='zhouzhi_project_memory'){const store=memoryStore(DATA);value=args.action==='search'?store.search(args):store.update([job.message,...(job.guidance||[]).map(g=>g.message)].join('\n'),args,permitted().map(f=>f.id));}
    else if(name==='zhouzhi_ocr_file'){
     const source=permitted().find(f=>f.id===args.id);if(!source)throw Error('资料不属于本次任务');value=await recognizePages(source,args,{askAI,id:job.id,buildDir:path.join(DATA,'preview','ocr',job.id,source.id),cancelled,save});
-    const coverage=(checkpoint.pageCoverage??={})[source.id]??={total:value.totalPages,pages:[]};coverage.total=value.totalPages;for(const p of value.pages)if(!coverage.pages.includes(p.page))coverage.pages.push(p.page);coverage.complete=coverage.pages.length===coverage.total;
+    if(cancelled())throw Error('已停止任务');const coverage=(checkpoint.pageCoverage??={})[source.id]??={total:value.totalPages,pages:[]};coverage.total=value.totalPages;for(const p of value.pages)if(!coverage.pages.includes(p.page))coverage.pages.push(p.page);coverage.complete=coverage.pages.length===coverage.total;
    }
    else if(name==='zhouzhi_reconcile_tables'){
     const sources=await Promise.all(args.sources.map(async s=>{const sheet=(await get(s.id)).sheets?.find(x=>x.name===s.sheet);if(!sheet)throw Error('关联工作表不存在或未解析');return{...s,sheet};}));value=reconcileTables(sources,args);
@@ -155,15 +158,15 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
     else{const items=info.parts?.find(p=>p.part===args.part)?.blocks||info.slides?.find(s=>'slide:'+s.id===args.part)?.elements;if(!items)throw Error('指定原生结构不存在');value={format:info.format,fingerprint:info.fingerprint,part:args.part,total:items.length,items:items.slice(args.offset,args.offset+args.limit).map(shorten),nextOffset:args.offset+args.limit<items.length?args.offset+args.limit:null,note:info.note};}
    }
    else if(name==='zhouzhi_edit_template'||name==='zhouzhi_edit_workbook'){
-    const source=await get(args.id),format=path.extname(source.path).slice(1).toLowerCase();if(!(job.deliveryFormats||[]).includes(format))throw Error('本轮未授权修改此格式文件');if(!askAI)throw Error('文件检查服务不可用');assertPublicOutput(args);
+    const source=await get(args.id),format=path.extname(source.path).slice(1).toLowerCase();assertEditSource(job,source);if(!(job.deliveryFormats||[]).includes(format))throw Error('本轮未授权修改此格式文件');if(!askAI)throw Error('文件检查服务不可用');assertPublicOutput(args);
     if(name==='zhouzhi_edit_workbook'&&format!=='xlsx'||name==='zhouzhi_edit_template'&&!['docx','pptx'].includes(format))throw Error('编辑方式与文件格式不一致');
     const digest=createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0,20),id=job.id+'-structure-'+digest,prior=job.files.find(f=>f.id===id);
     if(prior)value={id:prior.id,name:prior.name,alreadyCreated:true};else{
      const out=path.join(DATA,'preview','outputs');fs.mkdirSync(out,{recursive:true});const target=path.join(out,id+'.'+format),build=path.join(DATA,'preview','native-edits',id);
-     const evidence=await(name==='zhouzhi_edit_workbook'?editWorkbookStructure(source.path,target,args):editTemplate(source.path,target,args));
-     if(format==='xlsx')await recalculateOffice(target,path.join(build,'recalculation'),{cancelled});await reviewOffice(target,path.join(build,'review'),{askAI,id:job.id,cancelled});if(cancelled())throw Error('已停止任务');
+     const evidence=await(name==='zhouzhi_edit_workbook'?editWorkbookStructure(source.path,target,args):editTemplate(source.path,target,args));if(cancelled())throw Error('已停止任务');
+     if(format==='xlsx')await recalculateOffice(target,path.join(build,'recalculation'),{cancelled});if(cancelled())throw Error('已停止任务');await reviewOffice(target,path.join(build,'review'),{askAI,id:job.id,cancelled});if(cancelled())throw Error('已停止任务');
      const outputName=String(args.title||source.name).replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/\.(docx|xlsx|pptx)$/i,'').slice(0,80)+'.'+format,file={id,name:outputName,path:target,url:'/api/preview/outputs/'+id,parentId:source.id,version:(source.version||1)+1,createdAt:new Date().toISOString(),changes:evidence.changed};
-     assertPublicOutput({name:outputName,text:(await extractDocument(target)).text});job.files.push(file);value={id,name:outputName,...evidence,validated:true,version:file.version};
+     assertPublicOutput({name:outputName,text:(await extractDocument(target)).text});if(cancelled())throw Error('已停止任务');job.files.push(file);value={id,name:outputName,...evidence,validated:true,version:file.version};
     }
    }
    else if(name==='zhouzhi_task_plan'){value=args.action==='read'?taskPlan(job):updateTaskPlan(job,args.steps,permitted().map(f=>f.id));}
@@ -179,18 +182,18 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
    else if(name==='zhouzhi_compare_tables'){const left=(await get(args.leftId)).sheets?.find(s=>s.name===args.leftSheet),right=(await get(args.rightId)).sheets?.find(s=>s.name===args.rightSheet);if(!left||!right)throw Error('指定工作表不存在或未能解析');value=compareTables(left,right,args);}
    else if(name==='zhouzhi_view_page'){
     const file=await get(args.id);if(!Number.isSafeInteger(args.page)||args.page<1)throw Error('页码无效');
-    if(!previews.has(file.id))previews.set(file.id,renderOffice(file.path,path.join(DATA,'preview','page-read',job.id,file.id),{cancelled,firstPage:args.page,lastPage:args.page}));const base=await previews.get(file.id);if(args.page>base.totalPages)throw Error('指定页码不存在');
-    const key=file.id+':'+args.page;if(!previews.has(key))previews.set(key,base.firstPage===args.page?Promise.resolve(base):renderOffice(base.pdf,path.join(DATA,'preview','page-read',job.id,file.id),{cancelled,firstPage:args.page,lastPage:args.page}));const rendered=await previews.get(key);
+    if(!previews.has(file.id))previews.set(file.id,renderOffice(file.path,path.join(DATA,'preview','page-read',job.id,file.id),{cancelled,firstPage:args.page,lastPage:args.page}));const base=await previews.get(file.id);if(cancelled())throw Error('已停止任务');if(args.page>base.totalPages)throw Error('指定页码不存在');
+    const key=file.id+':'+args.page;if(!previews.has(key))previews.set(key,base.firstPage===args.page?Promise.resolve(base):renderOffice(base.pdf,path.join(DATA,'preview','page-read',job.id,file.id),{cancelled,firstPage:args.page,lastPage:args.page}));const rendered=await previews.get(key);if(cancelled())throw Error('已停止任务');
     const coverage=(checkpoint.pageCoverage??={})[file.id]??={total:base.totalPages,pages:[]};if(!coverage.pages.includes(args.page))coverage.pages.push(args.page);coverage.complete=coverage.pages.length===coverage.total;
     contentItems=[...text({id:file.id,page:args.page,totalPages:base.totalPages}),{type:'inputImage',imageUrl:'data:image/png;base64,'+fs.readFileSync(rendered.pages[0]).toString('base64')}];
    }
    else if(name==='zhouzhi_edit_file'){
-    const source=await get(args.id),format=path.extname(source.path).slice(1).toLowerCase();if(!(job.deliveryFormats||[]).includes(format))throw Error('本轮未授权交付或修改此格式文件，请先向用户确认');if(!askAI)throw Error('文件检查服务不可用');assertPublicOutput(args);
+    const source=await get(args.id),format=path.extname(source.path).slice(1).toLowerCase();assertEditSource(job,source);if(!(job.deliveryFormats||[]).includes(format))throw Error('本轮未授权交付或修改此格式文件，请先向用户确认');if(!askAI)throw Error('文件检查服务不可用');assertPublicOutput(args);
     const digest=createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0,20),id=job.id+'-edit-'+digest,prior=job.files.find(f=>f.id===id);
     if(prior)value={id:prior.id,name:prior.name,alreadyCreated:true};else{
-     const out=path.join(DATA,'preview','outputs');fs.mkdirSync(out,{recursive:true});const target=path.join(out,id+'.'+format),build=path.join(DATA,'preview','native-edits',id);const evidence=await editOffice(source.path,target,args);
-     if(format==='xlsx')await recalculateOffice(target,path.join(build,'recalculation'),{cancelled});if(format!=='md')await reviewOffice(target,path.join(build,'review'),{askAI,id:job.id,cancelled});
-     if(cancelled())throw Error('已停止任务');const name=String(args.title||source.name).replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/\.(docx|xlsx|pptx|md)$/i,'').slice(0,80)+'.'+format,file={id,name,path:target,url:'/api/preview/outputs/'+id,parentId:source.id,version:(source.version||1)+1,createdAt:new Date().toISOString(),changes:evidence.changed};assertPublicOutput({name,text:(await extractDocument(target)).text});job.files.push(file);value={id,name,changed:evidence.changed,validated:true};
+     const out=path.join(DATA,'preview','outputs');fs.mkdirSync(out,{recursive:true});const target=path.join(out,id+'.'+format),build=path.join(DATA,'preview','native-edits',id);const evidence=await editOffice(source.path,target,args);if(cancelled())throw Error('已停止任务');
+     if(format==='xlsx')await recalculateOffice(target,path.join(build,'recalculation'),{cancelled});if(cancelled())throw Error('已停止任务');if(format!=='md')await reviewOffice(target,path.join(build,'review'),{askAI,id:job.id,cancelled});
+     if(cancelled())throw Error('已停止任务');const name=String(args.title||source.name).replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/\.(docx|xlsx|pptx|md)$/i,'').slice(0,80)+'.'+format,file={id,name,path:target,url:'/api/preview/outputs/'+id,parentId:source.id,version:(source.version||1)+1,createdAt:new Date().toISOString(),changes:evidence.changed};assertPublicOutput({name,text:(await extractDocument(target)).text});if(cancelled())throw Error('已停止任务');job.files.push(file);value={id,name,changed:evidence.changed,validated:true};
     }
    }
    else if(name==='zhouzhi_view_image'){
@@ -203,12 +206,12 @@ export function createAssistantTools({session,job,save,extractDocument,priorOutp
     if(!args.part)value=parts.map(p=>({id:p.id,name:p.name||p.title||p.id,total:p.items.length}));
     else{const p=parts.find(p=>p.id===args.part);if(!p)throw Error('指定页面或表格不存在');const items=p.items.slice(args.offset,args.offset+args.limit),addresses=new Set(items.flatMap(r=>Object.keys(r)));value={id:p.id,total:p.items.length,items,...(p.cells?{cells:p.cells.filter(c=>addresses.has(c.address)),note:'日期和数值类型、显示格式、公式单独保留。公式值是文件缓存，不代表本轮重新计算；缺少缓存不得猜测。'}:{}),nextOffset:args.offset+args.limit<p.items.length?args.offset+args.limit:null};}
    }
-   if(job.status!=='running')throw Error('任务已停止');
+   if(cancelled())throw Error('任务已停止');
    if(cacheable.has(name)&&!cacheHit){toolCache.set(cacheKey,value);if(toolCache.size>32)toolCache.delete(toolCache.keys().next().value);}
    const evidenceId='e'+receipts.length+'-'+createHash('sha256').update(String(callId)+name+JSON.stringify(args)).digest('hex').slice(0,8);
    receipts.push({callId,evidenceId,tool:name,completedAt:new Date().toISOString(),durationMs:Math.round(performance.now()-started),...(cacheHit?{cached:true}:{}),arguments:args,...(args.id?{fileId:args.id}:{}),summary:evidenceSummary(name,value,args)});save();
    return {success:true,contentItems:contentItems?[...text({evidenceId}),...contentItems]:text(Array.isArray(value)?{evidenceId,items:value}:{...value,evidenceId})};
-  }catch(error){const issues=error.code==='OFFICE_LAYOUT_FAILED'?(error.issues||[]).slice(0,8).map(i=>({pageStart:i.pageStart,issue:publicError(i.issue)})):[],availableFiles=/资料不属于本次任务/.test(error.message)?permitted().slice(0,100).map(f=>({id:f.id,name:f.name})):null;receipts.push({callId,tool:name,failed:true,completedAt:new Date().toISOString(),durationMs:Math.round(performance.now()-started),error:publicError(error.message),...(issues.length?{issues}:{})});save();return {success:false,contentItems:text({error:publicError(error.message),...(availableFiles?{availableFiles,note:'只能使用列表中的准确id，不能用文件名、摘要、猜测或自行拼接的编号。'}:{}),...(issues.length?{issues,note:'只针对实际可读性问题修复，不能改变用户指定文字、位置或保留格式要求；不能用放到其他段落或重建替代原要求。'}:{})})};}
+  }catch(error){if(!isActive())return {success:false,contentItems:text({error:'本次执行已暂停或过期，结果未写入当前任务'})};const issues=error.code==='OFFICE_LAYOUT_FAILED'?(error.issues||[]).slice(0,8).map(i=>({pageStart:i.pageStart,issue:publicError(i.issue)})):[],availableFiles=/资料不属于本次任务/.test(error.message)?permitted().slice(0,100).map(f=>({id:f.id,name:f.name})):null;receipts.push({callId,tool:name,failed:true,completedAt:new Date().toISOString(),durationMs:Math.round(performance.now()-started),error:publicError(error.message),...(issues.length?{issues}:{})});save();return {success:false,contentItems:text({error:publicError(error.message),...(availableFiles?{availableFiles,note:'只能使用列表中的准确id，不能用文件名、摘要、猜测或自行拼接的编号。'}:{}),...(issues.length?{issues,note:'只针对实际可读性问题修复，不能改变用户指定文字、位置或保留格式要求；不能用放到其他段落或重建替代原要求。'}:{})})};}
  }
  return {definitions,execute};
 }

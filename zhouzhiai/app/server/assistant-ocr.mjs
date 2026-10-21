@@ -14,6 +14,7 @@ export async function recognizePages(file,{startPage=1,pageCount=3},{askAI,id,bu
   if(cancelled())throw Error('已停止任务');
   if(image){if(fs.statSync(file.path).size>12*1024*1024)throw Error('图片过大，请上传压缩后的图片');rendered={pages:[file.path],firstPage:1,totalPages:1};}
   else rendered=await renderOffice(file.path,buildDir,{cancelled,firstPage:startPage,lastPage:end,scale:2400,clipEnd:true});
+  if(cancelled())throw Error('已停止任务');
   file.ocr.totalPages=rendered.totalPages;
   end=Math.min(end,rendered.totalPages);const validMissing=missing.filter(p=>p<=end);
   for(let i=0;i<validMissing.length;i+=3){

@@ -71,7 +71,7 @@ test('阶段性答复受公开守卫保护、不可在验收发布，也不能�
 });
 test('用户补充后续办原任务，复用草稿与成果，不让用户重述',async()=>{
  const s={id:'s',files:[],messages:[]},db={sessions:[s],jobs:[]};let fixed=false;const assistant=createAssistant({db,save(){},fileContext:()=>[],imageInputs:()=>[],artifact(){throw Error('不要文件');},steerAI:async()=>false,cancelAI:async()=>{},askAI:async(_id,prompt,schema)=>schema.properties.ready?verdict(fixed?'passed':'missing','缺少单价'):({answer:fixed?'金额30元。':'请补充单价。'})});
- await assistant.submit('s',{message:'先核对数量，再算金额'});for(let i=0;i<12;i++)await flush();assert.equal(db.jobs[0].status,'failed');assert.ok(s.pendingRecovery);fixed=true;
+ await assistant.submit('s',{message:'先核对数量，再算金额'});for(let i=0;i<12;i++)await flush();assert.equal(db.jobs[0].status,'failed');assert.equal(db.jobs[0].needsInput,false);assert.equal(db.jobs[0].errorCode,'TASK_NO_PROGRESS');assert.ok(s.pendingRecovery);fixed=true;
  await assistant.submit('s',{message:'补充：单价10元，数量3个'});for(let i=0;i<12;i++)await flush();assert.equal(db.jobs.length,1);assert.equal(db.jobs[0].status,'completed');assert.match(db.jobs[0].answer,/30/);assert.equal(s.pendingRecovery,undefined);assert.equal(publicAssistantSession({...s,pendingRecovery:{jobId:'private'}}).pendingRecovery,undefined);
 });
 test('有附件的含糊分析同样有验收，简单闲聊不增调用',()=>{assert.equal(needsTaskWorkflow('看看这个',[],1),true);assert.equal(needsTaskWorkflow('你好',[],0),false);});
@@ -98,7 +98,7 @@ test('PPT原生底板和正文可以分层，但前景重叠、越界和错误�
 test('明确先确认口径的自然问题保存待补充状态，普通答复的可选追问不强行承接',async()=>{
  assert.equal(shouldRetainQuestion('核对重复金额，先确认口径','请确认：累计还是版本？'),true);assert.equal(shouldRetainQuestion('介绍一下公司','介绍如下。你需要进一步资料吗？'),false);
  const session={id:'s',files:[],messages:[]},db={sessions:[session],jobs:[]};const assistant=createAssistant({db,save(){},fileContext:()=>[],imageInputs:()=>[],artifact(){throw Error('不应制作');},steerAI:async()=>false,cancelAI:async()=>{},askAI:async()=>({answer:'请确认：累计还是版本？'})});
- await assistant.submit('s',{message:'核对重复金额，先确认口径'});for(let i=0;i<6;i++)await flush();assert.equal(db.jobs[0].status,'completed');assert.ok(session.pendingClarification);assert.equal(db.jobs[0].checkpoint.clarification.question,'请确认：累计还是版本？');
+ await assistant.submit('s',{message:'核对重复金额，先确认口径'});for(let i=0;i<6;i++)await flush();assert.equal(db.jobs[0].status,'waiting_user');assert.ok(session.pendingClarification);assert.equal(db.jobs[0].checkpoint.clarification.question,'请确认：累计还是版本？');
 });
 test('重算前即拒绝外部资源、恶意名称公式和活动控件，不等渲染时才阻断',async()=>{
  const zip=new JSZip();zip.file('xl/_rels/workbook.xml.rels','<Relationships><Relationship Id="e" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" TargetMode="External" Target="https://example.com/image.png"/></Relationships>');await assert.rejects(assertSafeOfficeResources(zip),/外部加载/);
