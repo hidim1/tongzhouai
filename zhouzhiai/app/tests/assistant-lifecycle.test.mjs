@@ -78,3 +78,32 @@ test('追问清理旧turn尚未结束时切换新任务，清理后队列会继�
  const api=createAssistant({db,save(){},askAI:async(_id,_prompt,_schema,_images,_progress,_effort,{tools})=>{calls++;if(calls===1){await tools.execute('zhouzhi_clarify',{question:'哪个口径？',options:[]},'ask');return new Promise(()=>{});}return{answer:'新任务完成'};},pauseAI:()=>new Promise(r=>releasePause=r),cancelAI:async()=>{},steerAI:async()=>false,artifact(){throw Error('不制作');},fileContext:()=>[],imageInputs:()=>[]});
  await api.submit('s',{message:'整理口径'});await settled();assert.equal(db.jobs[0].status,'waiting_user');await api.submit('s',{message:'新任务，介绍术语'});assert.equal(db.jobs[1].status,'queued');releasePause();await settled();assert.equal(db.jobs[1].status,'completed');assert.equal(calls,2);
 });
+
+test('真实回归：未调用工具的收件团队问题必须等待，回答后同任务交付Markdown',async()=>{
+ const question='请先确认这份验收通知发给采购团队还是设计团队。确认后我再制作 Markdown 文件。';
+ const s={id:'s',messages:[],files:[]},db={sessions:[s],jobs:[]};let analyses=0,audits=0,writes=0;
+ const api=createAssistant({db,save(){},cancelAI:async()=>{},pauseAI:async()=>{},steerAI:async()=>false,fileContext:()=>[],imageInputs:()=>[],artifact:async(title,format,body)=>{writes++;assert.match(body,/采购团队/);return{id:'delivered',name:title+'.'+format};},askAI:async(_id,prompt,schema)=>{
+  if(schema.properties.ready){audits++;return verdict('passed');}
+  analyses++;if(analyses===1)return{answer:question,files:[]};
+  assert.match(prompt,/发给采购团队/);return{answer:'已为采购团队制作验收通知。',files:[{title:'验收通知',format:'md',body:'请采购团队在 2026-10-23 前提交价目表。',columns:[],rows:[],presentation:null}]};
+ }});
+ const first=await api.submit('s',{message:'请生成 Markdown 验收通知，先问我发给采购团队还是设计团队，确认后再制作。不要联网。'});await settled();const job=db.jobs[0];
+ assert.equal(job.status,'waiting_user');assert.equal(job.needsInput,true);assert.equal(job.completedAt,undefined);assert.equal(job.answer,question);assert.equal(s.messages.at(-1).text,question);assert.equal(writes,0);assert.equal(audits,0);
+ const reply=await api.submit('s',{message:'发给采购团队，请继续原任务。'});await settled();
+ assert.equal(reply.job.id,first.job.id);assert.equal(reply.receipt,'resumed');assert.equal(db.jobs.length,1);assert.equal(job.status,'completed');assert.equal(analyses,2);assert.equal(writes,1);assert.equal(job.files[0].name,'验收通知.md');
+});
+
+test('真实回归：修复阶段的自然必要追问立即暂停，不再审核或假完成',async()=>{
+ const question='请先确认这份验收通知发给采购团队还是设计团队。确认后我再制作 Markdown 文件。';
+ const s={id:'s',messages:[],files:[]},db={sessions:[s],jobs:[]};let analyses=0,audits=0,writes=0;
+ const api=createAssistant({db,save(){},cancelAI:async()=>{},pauseAI:async()=>{},steerAI:async()=>false,fileContext:()=>[],imageInputs:()=>[],artifact:async(title,format)=>{writes++;return{id:'repaired',name:title+'.'+format};},askAI:async(_id,_prompt,schema)=>{
+  if(schema.properties.ready){audits++;return verdict(analyses<3?'missing':'passed');}
+  analyses++;if(analyses===1)return{answer:'先读取了资料，尚未确认收件团队。',files:[]};
+  if(analyses===2)return{answer:question,files:[]};
+  return{answer:'已按采购团队制作。',files:[{title:'验收通知',format:'md',body:'采购团队，请提交价目表。',columns:[],rows:[],presentation:null}]};
+ }});
+ await api.submit('s',{message:'请先核对资料，再生成 Markdown 通知；先确认收件人，确认后再制作。不要联网。'});await settled();const job=db.jobs[0];
+ assert.equal(job.status,'waiting_user');assert.equal(analyses,2);assert.equal(audits,1);assert.equal(writes,0);assert.equal(s.messages.at(-1).text,question);
+ await api.submit('s',{message:'发给采购团队，请继续原任务。'});await settled();
+ assert.equal(job.status,'completed');assert.equal(db.jobs.length,1);assert.equal(analyses,3);assert.equal(audits,2);assert.equal(writes,1);
+});
