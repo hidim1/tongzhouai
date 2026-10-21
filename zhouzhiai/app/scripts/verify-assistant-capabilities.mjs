@@ -7,7 +7,7 @@ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'zhouzhi-capability-qa-')),out=
 const title=(text,id='title')=>({kind:'text',id,x:80,y:70,width:1120,height:90,text,fontSize:48,bold:true,color:'#17384A',role:'title'});
 const font=process.platform==='linux'?'Noto Sans CJK SC':'Arial Unicode MS';
 const plan={design:{rationale:'合成数据验收，平铺原生表格与图表',background:'#FFFFFF',textColor:'#17384A',accentColor:'#008FA8',fontFamily:font},assets:[],slides:[
- {layout:'canvas',title:'合成采购数据',background:'#FFFFFF',notes:'全部为人工合成的测试数据。',elements:[title('合成采购数据'),{kind:'table',id:'table',x:80,y:220,width:1120,height:220,headers:['编号','金额（元）'],rows:[['001','0.30'],['002','0.40']],columnWeights:[1,2],fontSize:28}]},
+ {layout:'canvas',title:'合成采购数据',background:'#FFFFFF',notes:'全部为人工合成的测试数据。',elements:[{kind:'shape',id:'heading-card',geometry:'roundRect',x:64,y:56,width:1152,height:130,fill:'#EAF4F5',lineColor:'#D1E5E7',lineWidth:1,layer:'background'},title('合成采购数据'),{kind:'table',id:'table',x:80,y:220,width:1120,height:220,headers:['编号','金额（元）'],rows:[['001','0.30'],['002','0.40']],columnWeights:[1,2],fontSize:28}]},
  {layout:'canvas',title:'合成金额对比',background:'#FFFFFF',notes:'全部为人工合成的测试数据。',elements:[title('合成金额对比'),{kind:'chart',id:'chart',x:80,y:210,width:1120,height:390,chartType:'bar',categories:['001','002'],series:[{name:'金额',values:[0.3,0.4]}],unit:'元'}]},
 ]};
 const deck=path.join(out,'synthetic.pptx'),ppt=await makePresentation(plan,deck,path.join(build,'ppt'),{allowGenerated:false});assert.equal(ppt.contentCheck.checkedCharts,1);
@@ -15,7 +15,7 @@ console.log(JSON.stringify({stage:'ppt-created',dir,previews:ppt.previews}));
 const native=await inspectTemplate(deck),edited=path.join(out,'template-edited.pptx'),copy=await editTemplate(deck,edited,{fingerprint:native.fingerprint,operations:[{action:'duplicateSlide',slideId:native.slides[0].id,afterSlideId:native.slides[0].id}]});
 const next=await inspectTemplate(edited),copyId=copy.changed[0].newSlideId,element=next.slides.find(s=>s.id===copyId).elements.find(e=>e.text==='合成采购数据'),revised=path.join(out,'template-final.pptx');
 await editTemplate(edited,revised,{fingerprint:next.fingerprint,operations:[{action:'replaceSlideText',slideId:copyId,elementId:element.id,text:'补充采购数据'}]});
-const expected=structuredClone(plan);expected.slides.splice(1,0,structuredClone(plan.slides[0]));expected.slides[1].title='补充采购数据';expected.slides[1].elements[0].text='补充采购数据';await verifyPresentationContent(revised,expected);
+const expected=structuredClone(plan);expected.slides.splice(1,0,structuredClone(plan.slides[0]));expected.slides[1].title='补充采购数据';expected.slides[1].elements.find(e=>e.kind==='text'&&e.role==='title').text='补充采购数据';await verifyPresentationContent(revised,expected);
 const original=await officePackage(deck),final=await officePackage(revised);for(const name of Object.keys(original.files).filter(p=>/^ppt\/(?:slideMasters|slideLayouts|theme|media)\//.test(p)&&!original.files[p].dir))assert.deepEqual(await final.file(name).async('nodebuffer'),await original.file(name).async('nodebuffer'));
 const pRender=await renderOffice(revised,path.join(build,'ppt-final'));assert.equal(pRender.totalPages,3);
 const word=path.join(out,'notice.docx'),body='## 资料清单\n\n设计团队提供全量物料库。\n\n运营管理团队提供采购价目表和自制标准件制造成本。\n\n| 编号 | 金额 |\n| --- | --- |\n| 001 | 0.30 |';await makeDocument('合成通知',body,word);await verifyOfficeContent(word,{format:'docx',title:'合成通知',body});

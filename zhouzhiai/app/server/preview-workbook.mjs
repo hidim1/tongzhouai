@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import {nodeText,parseMarkdown} from '../shared/markdown.mjs';
 import {Decimal} from './assistant-decimal.mjs';
+import {officeDesign} from './office-design.mjs';
 const kinds=['text','number','currency','percentage','date'];
 const plain=value=>nodeText(parseMarkdown(String(value??''))).trim();
 const length=s=>[...String(s)].reduce((n,c)=>n+(/[\u3400-\u9fff]/.test(c)?2:1),0);
@@ -33,12 +34,12 @@ export function workbookSheets(columns,rows,extraSheets=[],plan=null){
   return{...s,rows:s.rows.map(r=>{if(!Array.isArray(r)||r.length!==s.columns.length)throw Error('Excel数据与表头列数不一致，不能省略字段');return r.map((v,i)=>valueFor(v,s.columns[i].kind));})};
  });
 }
-export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[],plan=null,engineering=false,readableLayout=false}={}){
+export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[],plan=null,engineering=false,readableLayout=false,design:selection=null}={}){
  title=String(title||'').trim().replace(/\.(docx|xlsx|pptx|md)$/i,'');
- const sheets=workbookSheets(columns,rows,extraSheets,plan),wb=new ExcelJS.Workbook();wb.creator='舟知';wb.title=title;
+ const design=officeDesign(title,body,selection),sheets=workbookSheets(columns,rows,extraSheets,plan),wb=new ExcelJS.Workbook();wb.creator='舟知';wb.title=title;
  for(const [si,s] of sheets.entries()){
   const sheet=wb.addWorksheet(s.name),header=engineering?1:4;sheet.properties.defaultRowHeight=24;
-  if(!engineering){sheet.getCell('A2').value=si===0?title:s.name;sheet.getCell('A2').font={name:'Microsoft YaHei',size:16,bold:true,color:{argb:'FF172F42'}};sheet.getRow(2).height=32;}
+  if(!engineering){sheet.getCell('A2').value=si===0?title:s.name;sheet.getCell('A2').font={name:design.font,size:16,bold:true,color:{argb:'FF'+design.ink}};sheet.getRow(2).height=32;}
   sheet.getRow(header).values=s.columns.map(c=>plain(c.label));sheet.getRow(header).height=30;
   for(const r of s.rows)sheet.addRow(r);
   sheet.views=[{state:'frozen',ySplit:header,xSplit:s.columns.length>6?1:0,showGridLines:false}];sheet.autoFilter={from:{row:header,column:1},to:{row:header+s.rows.length,column:s.columns.length}};
@@ -49,8 +50,8 @@ export async function makeWorkbook(title,body,columns,rows,target,{extraSheets=[
   }
   for(let row=header;row<=header+s.rows.length;row++){
    let lines=1;sheet.getRow(row).eachCell({includeEmpty:true},(cell,col)=>{
-    cell.font={name:'Microsoft YaHei',size:readableLayout?12:11,color:{argb:row===header?'FFFFFFFF':'FF233A48'},bold:row===header};
-    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:row===header?'FF24495D':row%2?'FFFFFFFF':'FFF3F6F8'}};
+    cell.font={name:design.font,size:readableLayout?12:11,color:{argb:row===header?'FFFFFFFF':'FF'+design.ink},bold:row===header};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:row===header?'FF'+design.accent:row%2?'FFFFFFFF':'FF'+design.tint}};
     cell.alignment={vertical:'middle',horizontal:row===header||cell.value instanceof Date?'center':typeof cell.value==='number'?'right':'left',wrapText:true};
     cell.border=row===header?{bottom:{style:'thin',color:{argb:'FFDCE5EB'}}}:{};
     lines=Math.max(lines,...String(cell.value instanceof Date?'2026-10-12':cell.value??'').split('\n').map(t=>Math.ceil(length(t)/(sheet.getColumn(col).width-2))));

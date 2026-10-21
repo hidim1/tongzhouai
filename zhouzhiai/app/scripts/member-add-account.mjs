@@ -5,5 +5,5 @@ if(!registryFile||!/^zhouzhi(?:\d{2}|cs)$/.test(username||'')||confirmation!=='-
 let input='';for await(const chunk of process.stdin)input+=chunk;
 const credentials=JSON.parse(input);
 if(credentials.username!==username||!credentials.activationCode)throw new Error('发放信息不匹配');
-new MemberRegistry(registryFile).addMember(username,credentials.password,credentials.activationCode);
+new MemberRegistry(registryFile).addMember(username,credentials.password,credentials.activationCode,credentials.email);
 console.log(JSON.stringify({username,activated:false,added:true}));

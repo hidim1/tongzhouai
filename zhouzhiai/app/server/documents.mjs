@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 import WordExtractor from "word-extractor";
 import { load } from "cheerio";
 import { extractText, getDocumentProxy } from "unpdf";
-import {readPresentation,readWorkbook} from './office-package.mjs';
+import {readPresentation,readWorkbook,officePackage} from './office-package.mjs';
 import {
   Document,
   Packer,
@@ -25,7 +25,7 @@ import {
 // Portable document processing: no Office, Python or host-specific runtime.
 export async function extractDocument(file) {
   const ext = path.extname(file).toLowerCase();
-  if(ext==='.pptx')return readPresentation(file);
+  if(ext==='.pptx'){const parsed=await readPresentation(file);return{...parsed,visualContent:true,visualMetadataVersion:2,pageCount:parsed.slides.length};}
   if (ext === ".docx") {
     const raw = await mammoth.extractRawText({ path: file });
     const html = await mammoth.convertToHtml({ path: file });
@@ -43,7 +43,7 @@ export async function extractDocument(file) {
               .map((c) => $(c).text().trim()),
           ),
       );
-    return { text: raw.value.replace(/\n\n/g, "\n"), tables,visualContent:$("img").length>0,parseNote:$("img").length?'正文和表格已提取，图片内容须查看实际页面，不能仅凭文本声称完整审阅。':'' };
+    return { text: raw.value.replace(/\n\n/g, "\n"), tables,visualContent:true,visualMetadataVersion:2,parseNote:'正文和表格已提取；完整审阅还须查看真实页面，包括页眉页脚、图片和版式，不能仅凭文字层声称全面核对。' };
   }
   if (ext === ".doc") {
     const d = await new WordExtractor().extract(file);
@@ -58,8 +58,9 @@ export async function extractDocument(file) {
     };
   }
   if (ext === ".xlsx") {
+    const zip=await officePackage(file),visualContent=Object.keys(zip.files).some(n=>/^xl\/(?:charts|drawings|media)\//.test(n));
     const wb = new ExcelJS.Workbook();
-    try{await wb.xlsx.readFile(file);}catch{return readWorkbook(file);}
+    try{await wb.xlsx.readFile(file);}catch{return{...await readWorkbook(file),cellMetadataVersion:2,visualContent,visualMetadataVersion:2};}
     const sheets = wb.worksheets.map((s) => {
       const rows = [],metadata=[];
       s.eachRow((row) => {
@@ -89,7 +90,7 @@ export async function extractDocument(file) {
       return { name: s.name, rows, cells:metadata };
     });
     return {
-      sheets,cellMetadataVersion:1,
+      sheets,cellMetadataVersion:2,visualContent,visualMetadataVersion:2,
       text: sheets
         .map(
           (s) =>
@@ -111,7 +112,9 @@ export async function extractDocument(file) {
     try {
       const { text } = await extractText(pdf, { mergePages: false });
       const scanPages=text.flatMap((p,i)=>p.trim().length<12?[i+1]:[]);
-      return { text: text.map((p, i) => `第${i + 1}页\n${p}`).join("\n"),pageCount:text.length,scanPages,parseNote:scanPages.length?'仅提取PDF文字层；部分页面文字不足，须查看或识别扫描页后才能声称完整审阅。':'仅提取PDF文字层，图片和图表内容须查看真实页面。' };
+      // Text density cannot prove the absence of embedded images, charts or
+      // vectors. Full PDF review always requires the real pages as well.
+      return { text: text.map((p, i) => `第${i + 1}页\n${p}`).join("\n"),pageCount:text.length,scanPages,visualContent:true,visualMetadataVersion:2,parseNote:scanPages.length?'仅提取PDF文字层；须查看真实页面并识别扫描页后才能声称完整审阅。':'仅提取PDF文字层；完整审阅须查看真实页面，包含文字之外的图片、图表和注释。' };
     } finally {
       if(typeof pdf.destroy==='function')await pdf.destroy();else await pdf.loadingTask?.destroy();
     }

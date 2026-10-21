@@ -7,6 +7,7 @@ export const canvasPresentationSchema=obj({
  slides:{type:'array',maxItems:30,items:obj({layout:{type:'string',enum:['canvas']},title:str,background:str,notes:str,elements:{type:'array',maxItems:32,items:{anyOf:[
   obj({kind:{type:'string',enum:['text']},id:str,...rect,text:str,fontSize:number,bold:{type:'boolean'},color:str,role:{type:'string',enum:['title','body','caption']}}),
   obj({kind:{type:'string',enum:['image']},id:str,...rect,assetId:str,fit:{type:'string',enum:['contain','cover']},layer:{type:'string',enum:['background','content']}}),
+  obj({kind:{type:'string',enum:['shape']},id:str,...rect,geometry:{type:'string',enum:['rect','roundRect','ellipse','rightArrow']},fill:str,lineColor:str,lineWidth:number,layer:{type:'string',enum:['background','content']}}),
   obj({kind:{type:'string',enum:['table']},id:str,...rect,headers:strings,rows:{type:'array',items:strings},columnWeights:{type:'array',items:number},fontSize:number}),
   obj({kind:{type:'string',enum:['chart']},id:str,...rect,chartType:{type:'string',enum:['bar','line']},categories:strings,series:{type:'array',items:obj({name:str,values:{type:'array',items:number}})},unit:str}),
  ]}}})},

@@ -26,13 +26,16 @@ export class MemberRegistry {
     this.save();return issued;
   }
   // Administrator maintenance only: append one account without replacing existing accounts or sessions.
-  addMember(username,password,code){
+  addMember(username,password,code,email){
     if(!/^[a-z][a-z0-9_]{2,31}$/.test(username||'')||typeof password!=='string'||password.length<12||password.length>128)throw new Error('账号格式或密码长度不正确');
     if(this.data.users.some(u=>u.username===username))throw new Error('账号已存在，禁止覆盖');
+    const alias=email===undefined?undefined:normalizeLogin(email);
+    if(email!==undefined&&(!alias||! /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(alias)))throw new Error('企业邮箱格式不正确');
+    if(alias&&this.data.users.some(u=>normalizeLogin(u.email)===alias||normalizeLogin(u.username)===alias))throw new Error('企业邮箱已关联其他账号，禁止覆盖');
     const activationCode=code===undefined?'ZZ-'+randomBytes(20).toString('hex').toUpperCase().match(/.{1,8}/g).join('-'):normalizeActivationCode(code);
     if(!activationCode||this.data.users.some(u=>u.activationHash===digest(activationCode)))throw new Error('激活码格式不正确或已分配');
-    this.data.users.push({id:'member-'+randomBytes(16).toString('hex'),username,passwordHash:passwordHash(password),activationHash:digest(activationCode),installationHash:null,activatedAt:null,disabled:false});
-    this.save();return {username,password,activationCode};
+    this.data.users.push({id:'member-'+randomBytes(16).toString('hex'),username,...(alias?{email:alias}:{}),passwordHash:passwordHash(password),activationHash:digest(activationCode),installationHash:null,activatedAt:null,disabled:false});
+    try{this.save();}catch(error){this.data.users.pop();throw error;}return {username,...(alias?{email:alias}:{}),password,activationCode};
   }
   identity(username,installation,address='local'){
     if(!/^[a-f0-9]{64}$/.test(installation||''))throw new Error('请从舟知安装版登录');
@@ -80,7 +83,7 @@ export class MemberRegistry {
   }
   changePassword(username,password,nextPassword,confirmation,installation,address){
     const {user,key,installationHash}=this.credentials(username,password,installation,address);
-    if(!user.email||!/^zhouzhi(?:0[1-9]|10)$/.test(user.username))throw Error('当前账号请联系管理员修改密码');
+    if(!user.email||!/^zhouzhi(?:0[1-9]|[1-9]\d+)$/.test(user.username))throw Error('当前账号请联系管理员修改密码');
     if(!user.activatedAt)throw Error('账号尚未激活，请先完成激活再修改密码');
     if(!equal(user.installationHash,installationHash))throw Error('当前安装授权不匹配，请联系管理员');
     if(typeof nextPassword!=='string'||nextPassword.length<12||nextPassword.length>128)throw Error('新密码须为12至128位');

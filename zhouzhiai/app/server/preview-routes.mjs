@@ -50,7 +50,7 @@ async function artifact(title,format,body,columns=[],rows=[],scope='通用输出
   const filename=safe(title).replace(/\.(xlsx|docx|md|pptx)$/i,'')+'.'+format, target=path.join(out,id+'.'+format);
   if(scope==='通用输出'&&options.jobId&&['docx','xlsx'].includes(format)){
    let contentCheck;
-   await buildReviewedOffice({cancelled:options.cancelled,build:async readableLayout=>{if(format==='docx')await makeDocument(title,body,target,{readableLayout});else await makeWorkbook(title,body,columns,rows,target,{extraSheets,plan:options.workbook,readableLayout});contentCheck=await verifyOfficeContent(target,{format,title,body,columns,rows,extraSheets,workbook:options.workbook});},review:attempt=>reviewOffice(target,path.join(dir,'document-build',id,'attempt-'+attempt),{askAI,id:options.jobId,cancelled:options.cancelled})});
+   await buildReviewedOffice({cancelled:options.cancelled,build:async readableLayout=>{if(format==='docx')await makeDocument(title,body,target,{readableLayout,design:options.design});else await makeWorkbook(title,body,columns,rows,target,{extraSheets,plan:options.workbook,readableLayout,design:options.design});contentCheck=await verifyOfficeContent(target,{format,title,body,columns,rows,extraSheets,workbook:options.workbook});},review:attempt=>reviewOffice(target,path.join(dir,'document-build',id,'attempt-'+attempt),{askAI,id:options.jobId,cancelled:options.cancelled,design:options.design})});
    options.onContentVerified?.(contentCheck);
    return {id,name:filename,path:target,url:'/api/preview/outputs/'+id,createdAt:new Date().toISOString(),version:1};
   }

@@ -16,9 +16,10 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  previewAI.connect=async()=>{previewAI.status.authenticated=true;};
  previewAI.interrupt=async()=>{};
  previewAI.request=async(method,p)=>{
-  if(method==='thread/start'||method==='thread/resume'){assert.equal(p.config.web_search,'live');threads.push(p);return{thread:{id:p.threadId||'assistant-api-'+(++sequence)}};}
+  if(method==='thread/start'||method==='thread/resume'){assert.equal(p.config.web_search,p.developerInstructions.includes('草稿验收员')?'disabled':'live');if(p.config.web_search==='live')threads.push(p);return{thread:{id:p.threadId||'assistant-api-'+(++sequence)}};}
   if(method==='turn/start'){
    assert.match(p.input[0].text,/final_answer/);
+   if(p.outputSchema.properties.ready){setTimeout(()=>previewAI.emit('event',{method:'item/completed',params:{threadId:p.threadId,item:{type:'agentMessage',phase:'final_answer',text:JSON.stringify({ready:true,checks:[{id:'request',status:'limited',reason:'本测试只验证传输与保存，模拟来源未作原文核实'}],sources:[]})}}}),10);return{turn:{id:'audit-'+sequence}};}
    requests.push(p);
    const files=p.outputSchema.properties.files;
    const response=files?{answer:'已整理完成。',files:[{title:'资料整理',format:'md',body:'公开资料整理测试。',columns:[],rows:[],presentation:null}],sources:[]}:{answer:'同舟纵横的公司介绍正文直接在这里阅读。\n这是对话答案，不是附件。',sources:[{title:'模拟公开来源',url:'https://example.com/company',date:'2026-10-11'}]};
@@ -52,7 +53,7 @@ test('智能助理完整正式结果不依赖turn-end，仍生成真实可下载
  assert.equal(fs.readdirSync(path.join(dir,'preview/outputs')).length,1);
  // Follow-up conversion uses the same conversation's substantive answer.
  const exported=await post(`/preview/sessions/${s.id}/tasks`,{message:'把刚才的介绍输出Markdown文件'});
- for(let i=0;i<100;i++){state=await(await fetch(base+'/api/preview/state')).json();job=state.jobs.find(x=>x.id===exported.id);if(job.status!=='running')break;await new Promise(r=>setTimeout(r,10));}
+ for(let i=0;i<700;i++){state=await(await fetch(base+'/api/preview/state')).json();job=state.jobs.find(x=>x.id===exported.id);if(job.status!=='running')break;await new Promise(r=>setTimeout(r,10));}
  assert.equal(job.status,'completed',job.error);assert.equal(job.files.length,1);
  assert.deepEqual(requests.at(-1).outputSchema.properties.files.items.properties.format.enum,['md']);
  assert.match(requests.at(-1).input[0].text,/公司介绍正文直接在这里阅读/);

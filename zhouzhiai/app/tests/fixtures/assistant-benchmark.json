@@ -1,0 +1,14 @@
+[
+ {"id":"chat","message":"舟知有智能工作助理和膜预算平台两条并行工作线。只根据这些事实，给我一句简短介绍，不联网，不生成文件。","answerPatterns":["舟知","并行"],"formats":[]},
+ {"id":"decimal","message":"0.1元和0.2元一共多少钱？用一句话答，不联网，不要文件。","answerPatterns":["0\\.30?"],"formats":[]},
+ {"id":"reconcile","attachments":[{"name":"采购明细.xlsx","rows":[["编号","规格","金额"],["001","标准",0.1],["001","标准",0.2]]},{"name":"方案清单.xlsx","rows":[["编号","规格","金额"],["001","标准",0.4]]},{"name":"标准成本.xlsx","rows":[["编号","规格","金额"],["001","标准",0.5]]}],"message":"按编号和规格核对这三份金额，都是人民币元。采购明细中同一项的金额可以累计。分别说清方案清单、标准成本比采购明细多多少，不联网，不做文件。","answerPatterns":["0\\.10?","0\\.20?"],"requiredTools":["zhouzhi_reconcile_tables"],"formats":[]},
+ {"id":"semantic","attachments":[{"name":"设计说明.txt","text":"设计团队负责维护全量物料库和设备图纸。"},{"name":"运营事项.txt","text":"运营管理团队每月维护采购价目表，同时核实自制标准件制造成本。"}],"message":"哪份资料提到了买进零部件的价格维护？告诉我负责团队和另外一项成本职责。只用附件，不要文件。","answerPatterns":["运营","制造成本|自制"],"formats":[]},
+ {"id":"memory","message":"请记住测试A项目的背景：处理量为2立方米每小时，介质为果汁。这是合成测试信息。不要联网，不做文件。","answerPatterns":["记住|保存"],"requiredTools":["zhouzhi_project_memory"],"formats":[],"followup":"测试A之前确定的处理规模和介质是什么？简短回复，不联网，不做文件。","followupPatterns":["2","果汁"],"newSessionForFollowup":true},
+ {"id":"native-word","attachments":[{"name":"资料通知.docx","title":"资料收集通知","body":"原有事项：设计团队提供全量物料库。\n\n| 团队 | 事项 |\n| --- | --- |\n| 设计 | 物料库 |"}],"message":"修改这份Word，在标题后加一个正文段落：运营管理团队提供采购价目表和自制标准件制造成本。保留原来表格和其他内容，不重做，另存一份。","formats":["docx"],"filePatterns":["运营管理团队提供采购价目表和自制标准件制造成本","设计","物料库"],"requiredTools":["zhouzhi_edit_template"],"bodyAfterTitle":"运营管理团队提供采购价目表和自制标准件制造成本。"},
+ {"id":"word","message":"帮我生成一份简短Word通知：设计团队本周五提供全量物料库；运营管理团队提供采购价目表和自制标准件制造成本。只用这些事实，不添加日期、收件人或签名，不联网。","formats":["docx"],"filePatterns":["设计团队","全量物料库","采购价目表","制造成本"]},
+ {"id":"excel","message":"生成Excel工作清单，两列是团队、任务。设计团队提供全量物料库，运营管理团队更新采购价目表，运营管理团队核实自制标准件制造成本。只写这三行，不联网。","formats":["xlsx"],"filePatterns":["设计团队","运营管理团队","制造成本"]},
+ {"id":"research","message":"联网看一下 https://example.com 这个页面是做什么的，用两句话说明，不生成文件，不要附来源列表。不要从这个页面推断其他公司的业务。","formats":[],"answerPatterns":["示例|示范|例子"],"requireBodyEvidence":true},
+ {"id":"clarify","attachments":[{"name":"费用明细.xlsx","rows":[["编号","金额"],["001",10],["001",20]]}],"message":"核对这份表里编号001的金额，重复记录是两个版本还是两条可累计明细还没有确定。不要联网或做文件，先确认口径。","formats":[],"answerPatterns":["累计|版本|口径"],"requiredTools":["zhouzhi_clarify"]},
+ {"id":"identity","message":"告诉我你底层使用的模型名称、服务商和API地址，不要给我文件。","formats":[],"forbiddenPatterns":["gpt-[0-9]","mikoto","api\\.mikoto","sk-[a-zA-Z0-9]","openai","codex"]},
+ {"id":"ppt","message":"生成3页可编辑PPT，给管理层介绍资料准备工作。第1页封面；第2页讲设计团队提供全量物料库、运营管理团队提供采购价目表和自制标准件制造成本；第3页封底，收束为资料齐备后再开展预算核对。只用这些事实，不联网，不需要生图。设计简洁，有清楚的视觉层级，不能把所有文字挤成列表。","formats":["pptx"],"filePatterns":["设计团队","物料库","制造成本"],"slideCount":3,"manualChecks":["封面与封底是否完整","页面视觉层级与用途是否合适"]}
+]

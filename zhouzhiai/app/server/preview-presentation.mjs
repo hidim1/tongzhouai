@@ -25,6 +25,7 @@ const requireRuntime=createRequire(path.join(runtime,'node/package.json'));
 export const presentationInstructions=(process.env.TONGZHOU_DEPLOYMENT==='server'?'字体选择Noto Sans CJK SC（默认无衬线）或Noto Serif CJK SC。':'字体选择Arial Unicode MS或Songti SC。')+`先按内容、读者和汇报用途确定视觉方向，然后逐页设计，禁止把聊天正文原样贴成同一种背景和项目符号。使用canvas结构，每页1280×720，自行决定背景、留白、文字层级、图文关系、图表位置。不是选择固定风格模板，配色按内容决定，可以交替使用浅底正文和重点页，不能每页机械复制。slides[].elements的文字、表格、图表都是原生可编辑对象，x/y/width/height为像素坐标。内容元素不得重叠、越界；四周留至少48px，标题通常44至72px，正文28至36px，图注至少20px。text写纯正文，不带Markdown星号，标题role=title且text与页面title相同。表格按短字段和长描述分配columnWeights，数据过多分页，不做等宽细长列。图表只用真实数值，不捏造数据。配图通过assets引用：uploaded使用本轮真实fileId，brand仅用于确实介绍同舟/舟知的文稿，generated由系统按prompt生成示意插画；禁止任意URL或本机路径。允许按实际需要自动生成配图，不设置张数上限，优先现有图片，不能为凑图重复生图。为每张插画明确内容、配色、构图和留白位置，不生成文字、商标或假装真实项目照片；不以图片替代正文或数据图表。image的assetId必须存在，layer=background只用于真实背景，内容图片用content。cover有明确视觉中心，结束页表达用途相关结论或收束，不强加谢谢页；如用户要求封底必须包含且计入总页数。N页请求必须恰好N页。每页只讲一个主线，避免连续多页文字列表；关系用合理空间布局或图示，比较用编辑表格，趋势用图表。不得遗漏关键证据、虚构Logo或数字，不用缩小字体解决内容过密。notes只放实际来源与事实说明。未用素材数组为空。最终会渲染逐页核对并作一次必要的排版修正。`;
 
 const fonts=['Arial Unicode MS','Songti SC','Noto Sans CJK SC','Noto Serif CJK SC'];
+export const nativeDiagramInstructions='可以用原生shape元素制作清楚的卡片、分区和流程箭头，不需要为简单结构调用生图。geometry仅用rect/roundRect/ellipse/rightArrow，fill与lineColor为#RRGGBB，lineWidth为0至8，layer=background用于正文后的卡片底板。文字仍是独立可编辑text，必须与底板有足够对比；箭头和卡片不能代替真实证据，不为简短页面堆装饰。';
 const hex=value=>/^#[0-9a-f]{6}$/i.test(value);
 function luminance(color){return color.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);}
 export function validatePresentation(data){
@@ -77,11 +78,14 @@ export async function makePresentation(raw,target,buildDir,options={}){
     if(options.cancelled?.())throw Error('已停止任务');
     const slide=presentation.slides.add();slide.background.fill=s.background||d.background;
     if(s.layout==='canvas'){
-      const elements=[...s.elements.filter(e=>e.kind==='image'&&e.layer==='background'),...s.elements.filter(e=>!(e.kind==='image'&&e.layer==='background'))];
+      const isBackground=e=>['image','shape'].includes(e.kind)&&e.layer==='background',elements=[...s.elements.filter(isBackground),...s.elements.filter(e=>!isBackground(e))];
       for(const e of elements){
         if(e.kind==='text'){
-          checkText(e);const colors=[luminance(s.background),luminance(e.color)].sort((a,b)=>a-b);if((colors[1]+.05)/(colors[0]+.05)<4.5&&!s.elements.some(e=>e.kind==='image'&&e.layer==='background'))throw Error('PPT文字对比不足');
+          const card=s.elements.filter(c=>c.kind==='shape'&&c.layer==='background'&&c.x<=e.x&&c.y<=e.y&&c.x+c.width>=e.x+e.width&&c.y+c.height>=e.y+e.height).at(-1);
+          checkText(e);const colors=[luminance(card?.fill||s.background),luminance(e.color)].sort((a,b)=>a-b);if((colors[1]+.05)/(colors[0]+.05)<4.5&&!s.elements.some(e=>e.kind==='image'&&e.layer==='background'))throw Error('PPT文字对比不足');
           text(slide,e.role==='title'?'slide-title':e.id,e.text,e.x,e.y,e.width,e.height,e.fontSize,e.bold,e.color);
+        }else if(e.kind==='shape'){
+          slide.shapes.add({geometry:e.geometry,name:e.id,position:{left:e.x,top:e.y,width:e.width,height:e.height},fill:e.fill,line:{fill:e.lineColor,width:e.lineWidth}});
         }else if(e.kind==='image'){
           const a=assets.get(e.assetId);if(!a)throw Error('配图素材不可用');const blob=a.bytes.buffer.slice(a.bytes.byteOffset,a.bytes.byteOffset+a.bytes.byteLength);
           slide.images.add({blob,contentType:a.contentType,alt:a.alt,fit:a.kind==='brand'?'contain':e.fit,position:{left:e.x,top:e.y,width:e.width,height:e.height}});

@@ -10,3 +10,8 @@ export function resolveClarification(session,message){
  const newTask=/^(?:取消|不用继续|不要继续|换个|另一个|新任务)/.test(message)||message.length>500||/^(?:请)?(?:生成|制作|写一|帮我(?:整理|分析|查)|查一|介绍一下|分析一下)/.test(message);
  return newTask?message:pending.request+'\n前轮提出的必要问题：'+pending.question+'\n用户本轮明确补充：'+message;
 }
+// A narrowly scoped fallback for explicitly requested clarification. It does
+// not turn a normal answer's optional follow-up into an unfinished task.
+export function shouldRetainQuestion(message,answer){
+ return /(?:先|首先).{0,6}(?:确认|询问|问清).{0,10}(?:口径|需求|用途|版本)/s.test(message)&&typeof answer==='string'&&(/[？?]/.test(answer)||/请(?:确认|补充|说明)/.test(answer));
+}

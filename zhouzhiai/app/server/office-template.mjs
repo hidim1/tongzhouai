@@ -29,8 +29,9 @@ export async function inspectTemplate(file){
  }
  if(format==='pptx'){
   const p=await readPart(zip,'ppt/presentation.xml'),names=await presentationParts(zip),ids=tags(p,'sldId').toArray().map(n=>p(n).attr('id'));
-  const slides=[];for(const [i,name] of names.entries()){const $=await readPart(zip,name);slides.push({id:ids[i],index:i,part:name,elements:tags($,'sp').toArray().map(n=>({id:tags($,'cNvPr',$(n)).first().attr('id'),text:textOf($,n)}))});}
-  return{format,fingerprint,slides,note:'页面与元素ID对应此指纹版本；可按原页复制新增、删除或重排，保留原母版、背景和素材。删除仅影响新版本可见页面，原件不变。'};
+  const size=tags(p,'sldSz').first(),scale=(Number(size.attr('cx'))||12192000)/1280,height=(Number(size.attr('cy'))||6858000)/scale;
+  const slides=[];for(const [i,name] of names.entries()){const $=await readPart(zip,name),nodes=['sp','pic','graphicFrame'].flatMap(t=>tags($,t).toArray());slides.push({id:ids[i],index:i,part:name,elements:nodes.map(n=>{const xfrm=tags($,'xfrm',$(n)).first(),off=tags($,'off',xfrm).first(),ext=tags($,'ext',xfrm).first();return{id:tags($,'cNvPr',$(n)).first().attr('id'),kind:n.name.split(':').at(-1),text:textOf($,n),frame:off.length&&ext.length?{x:Number(off.attr('x'))/scale,y:Number(off.attr('y'))/scale,width:Number(ext.attr('cx'))/scale,height:Number(ext.attr('cy'))/scale}:null};})});}
+  return{format,fingerprint,canvasWidth:1280,canvasHeight:height,slides,note:'页面与元素ID对应此指纹版本；可复制、删除、重排、修改文字或移动原生文字/图片/图表框，保留母版、背景与资源。坐标使用返回画布尺寸；分组内元素不自动移动。删除仅影响新版本，原件不变。'};
  }
  if(format==='xlsx'){
   const wb=await readPart(zip,'xl/workbook.xml');return{format,fingerprint,sheets:tags(wb,'sheet').toArray().map(n=>({name:wb(n).attr('name')})),note:'可在明确位置写入新范围、公式或新增表；保留原生样式和对象。新增数据不自动猜测或扩展其他公式范围，须明确给出汇总公式并重算。'};
@@ -49,6 +50,19 @@ export async function editTemplate(source,target,{fingerprint,operations=[]}={})
    if(!base||!base.parent)throw Error('原文块不存在或本轮已删除');
    if(op.action==='replaceParagraph'){if(base.name.split(':').at(-1)!=='p'||typeof op.text!=='string'||op.text.length>12000)throw Error('段落修改内容无效');if(['drawing','pict','fldChar','hyperlink'].some(t=>tags($,t,$(base)).length))throw Error('此段落含图片、字段或链接，请用唯一原文局部替换，不自动移除对象');$(base).replaceWith(paragraphXML($,base,op.text,styleSizes));nodes[index]=null;}
    else if(op.action==='insertParagraph'){if(base.name.split(':').at(-1)!=='p'||typeof op.text!=='string'||op.text.length>12000)throw Error('新增段落须指定原样式段落');$(base).after(paragraphXML($,base,op.text,styleSizes));}
+   else if(op.action==='insertStyledParagraph'){
+    if(typeof op.text!=='string'||op.text.length>12000)throw Error('新增正文内容无效');
+    let styleBase;if(op.styleBlockId==='normal'){styleBase=paragraphs($,base)[0]||nodes.find(n=>n?.name?.split(':').at(-1)==='p');if(!styleBase)throw Error('原文没有可继承的段落命名空间');styleBase=$(styleBase).clone()[0];$(styleBase).empty();const prefix=tagPrefix(styleBase);$(styleBase).append('<'+prefix+'pPr><'+prefix+'pStyle '+prefix+'val="Normal"/></'+prefix+'pPr>');}
+    else{const index=/^block:\d+$/.test(op.styleBlockId||'')?Number(op.styleBlockId.slice(6)):-1;styleBase=nodes[index];if(styleBase?.name?.split(':').at(-1)!=='p')throw Error('指定段落样式来源不存在');}
+    $(base).after(paragraphXML($,styleBase,op.text,styleSizes));
+   }
+   else if(op.action==='formatParagraph'){
+    if(base.name.split(':').at(-1)!=='p'||!Number.isFinite(op.fontSize)||op.fontSize<0||op.fontSize>48||op.fontSize>0&&op.fontSize<8||!['keep','left','center','right','both'].includes(op.alignment)||!['keep','bold','normal'].includes(op.weight)||op.color&&!/^#[0-9a-f]{6}$/i.test(op.color))throw Error('段落格式无效');
+    const prefix=tagPrefix(base);let pr=$(base).children().filter((_i,n)=>n.name?.split(':').at(-1)==='pPr').first();if(!pr.length){$(base).prepend('<'+prefix+'pPr/>');pr=$(base).children().first();}
+    if(op.alignment!=='keep'){tags($,'jc',pr).remove();pr.append('<'+prefix+'jc '+prefix+'val="'+op.alignment+'"/>');}
+    for(const run of tags($,'r',$(base)).toArray()){let rp=$(run).children().filter((_i,n)=>n.name?.split(':').at(-1)==='rPr').first();if(!rp.length){$(run).prepend('<'+prefix+'rPr/>');rp=$(run).children().first();}if(op.fontSize){for(const tag of ['sz','szCs']){tags($,tag,rp).remove();rp.append('<'+prefix+tag+' '+prefix+'val="'+Math.round(op.fontSize*2)+'"/>');}}if(op.color){tags($,'color',rp).remove();rp.append('<'+prefix+'color '+prefix+'val="'+op.color.slice(1)+'"/>');}if(op.weight!=='keep'){tags($,'b',rp).remove();rp.append('<'+prefix+'b '+prefix+'val="'+(op.weight==='bold'?'1':'0')+'"/>');}}
+    if(op.fontSize){let spacing=tags($,'spacing',pr).first();if(!spacing.length){pr.append('<'+prefix+'spacing/>');spacing=tags($,'spacing',pr).first();}spacing.attr(prefix+'lineRule','atLeast').attr(prefix+'line',String(Math.ceil(op.fontSize*20*1.35)));}
+   }
    else if(op.action==='deleteBlock'){if(op.part&&op.part!=='word/document.xml')throw Error('不删除页眉页脚结构');$(base).remove();nodes[index]=null;}
    else if(op.action==='replaceTable'||op.action==='appendTableRows'){
     if(base.name.split(':').at(-1)!=='tbl'||!Array.isArray(op.rows)||!op.rows.length||op.rows.length>1000)throw Error('表格数据无效');
@@ -66,6 +80,14 @@ export async function editTemplate(source,target,{fingerprint,operations=[]}={})
   const locate=id=>{const e=byId.get(String(id));if(!e||!e.node.parent)throw Error('指定页面不存在或已删除');return e;};
   for(const op of operations){
    if(op.action==='replaceSlideText'){const e=locate(op.slideId),$=await readPart(zip,e.part),shape=tags($,'sp').filter((_i,n)=>tags($,'cNvPr',$(n)).first().attr('id')===op.elementId);if(shape.length!==1||typeof op.text!=='string'||op.text.length>12000)throw Error('页面文字元素无效');wholeText($,shape[0],op.text);zip.file(e.part,$.xml());}
+   else if(op.action==='moveSlideElement'){
+    const e=locate(op.slideId),$=await readPart(zip,e.part),nodes=['sp','pic','graphicFrame'].flatMap(t=>tags($,t).toArray()),shape=nodes.find(n=>tags($,'cNvPr',$(n)).first().attr('id')===op.elementId);
+    const size=tags(p,'sldSz').first(),scale=(Number(size.attr('cx'))||12192000)/1280,height=(Number(size.attr('cy'))||6858000)/scale;
+    if(!shape||$(shape).parents().toArray().some(n=>n.name?.split(':').at(-1)==='grpSp')||![op.x,op.y,op.width,op.height].every(Number.isFinite)||op.x<0||op.y<0||op.width<=0||op.height<=0||op.x+op.width>1280||op.y+op.height>height)throw Error('原生元素位置无效、越界或属于分组');
+    const kind=shape.name.split(':').at(-1),pp=tagPrefix(shape),root=$.root().children().first();let ns='zhd';while(root.attr('xmlns:'+ns)&&root.attr('xmlns:'+ns)!=='http://schemas.openxmlformats.org/drawingml/2006/main')ns+='x';root.attr('xmlns:'+ns,'http://schemas.openxmlformats.org/drawingml/2006/main');const ap=ns+':';
+    let xfrm=tags($,'xfrm',$(shape)).first();if(!xfrm.length){if(kind==='graphicFrame'){$(shape).children().first().after('<'+pp+'xfrm/>');xfrm=tags($,'xfrm',$(shape)).first();}else{let pr=tags($,'spPr',$(shape)).first();if(!pr.length){$(shape).children().first().after('<'+pp+'spPr/>');pr=tags($,'spPr',$(shape)).first();}pr.prepend('<'+ap+'xfrm/>');xfrm=tags($,'xfrm',pr).first();}}
+    for(const tag of ['off','ext'])tags($,tag,xfrm).remove();xfrm.prepend('<'+ap+'off x="'+Math.round(op.x*scale)+'" y="'+Math.round(op.y*scale)+'"/><'+ap+'ext cx="'+Math.round(op.width*scale)+'" cy="'+Math.round(op.height*scale)+'"/>');zip.file(e.part,$.xml());
+   }
    else if(op.action==='duplicateSlide'){
     const e=locate(op.slideId),newPart=nextPart(zip,'ppt/slides','slide'),newId=String(Math.max(255,...[...byId.keys()].map(Number))+1),relId='zhouzhiSlide'+newId;
     zip.file(newPart,await zip.file(e.part).async('nodebuffer'));const oldRel=path.posix.dirname(e.part)+'/_rels/'+path.posix.basename(e.part)+'.rels',newRel=path.posix.dirname(newPart)+'/_rels/'+path.posix.basename(newPart)+'.rels';

@@ -1,14 +1,10 @@
 import fs from 'node:fs/promises';import {createHash} from 'node:crypto';
 import {officePackage,readPart,tags,tagPrefix} from './office-package.mjs';
+import {safeOfficeFormula as safeFormula} from './office-formula.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function address(value){const m=String(value).match(/^([A-Z]{1,3})([1-9]\d{0,6})$/);if(!m)throw Error('单元格地址无效');const col=[...m[1]].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0),row=Number(m[2]);if(col>16384||row>1048576)throw Error('单元格越界');return{col,row};}
 function letter(n){let result='';while(n){n--;result=String.fromCharCode(65+n%26)+result;n=Math.floor(n/26);}return result;}
-const functions=new Set(['SUM','AVERAGE','MIN','MAX','ROUND','ABS','IF','COUNT','COUNTA','SUMIF','SUMIFS','COUNTIF','COUNTIFS','AND','OR','NOT','IFERROR','DATE','YEAR','MONTH','DAY']);
-function safeFormula(formula){
- if(typeof formula!=='string'||!formula.trim()||formula.length>2000||/[\[\]|;\\]|https?:|WEBSERVICE|DDE|RTD|HYPERLINK|INDIRECT|IMPORT|EXEC/i.test(formula))throw Error('不支持外部、网络或间接访问公式');
- const clean=formula.replace(/^=/,'');for(const m of clean.matchAll(/([A-Z_][A-Z0-9_.]*)\s*\(/gi))if(!functions.has(m[1].toUpperCase()))throw Error('此公式函数尚不能可靠核对');return clean;
-}
 export async function editWorkbookStructure(source,target,{fingerprint,operations=[]}){
  const bytes=await fs.readFile(source);if(hash(bytes)!==fingerprint)throw Error('工作簿版本已经变化，请重新读取版本');
  if(!operations.length||operations.length>30)throw Error('工作簿结构修改范围无效');const zip=await officePackage(source);if(Object.keys(zip.files).some(p=>/^xl\/(?:externalLinks|pivotTables)\//.test(p)))throw Error('此工作簿含外部链接或透视表，暂不自动改结构');
