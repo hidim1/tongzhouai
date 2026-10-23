@@ -1,7 +1,8 @@
 import {store,getProject,uid,save as saveWorkspace} from './store.mjs';
 import {directionInput,detailedBudget,updateBudget,versionChanged,extraCategories,filesSnapshot} from './preview-workflow.mjs';
 import {redact} from './provider.mjs';
-import {estimateParameters,parameterKey,estimateReferences,estimateSchema,evaluateEstimate,estimatePrompt} from './preview-estimate.mjs';
+import {estimateParameters,parameterKey,estimateReferences} from './preview-estimate.mjs';
+import {recoverEstimate} from './preview-estimate-recovery.mjs';
 const string={type:'string'},strings={type:'array',items:string};
 const schema={type:'object',additionalProperties:false,required:['summary','sections','issues'],properties:{summary:string,sections:{type:'array',items:{type:'object',additionalProperties:false,required:['title','body','fileIds'],properties:{title:string,body:string,fileIds:strings}}},issues:strings}};
 export function installWorkflow(app,{db,save,askAI,artifact,fileContext,imageInputs}){
@@ -12,10 +13,10 @@ export function installWorkflow(app,{db,save,askAI,artifact,fileContext,imageInp
   const j={id:uid('estimate'),projectId:p.id,type:'ai-estimate',parameters,status:'running',createdAt:new Date().toISOString(),phase:'AI 正在分析需求、配置档次与成本依据',files:[]};db.jobs.push(j);save();res.json(j);
   void(async()=>{try{
    const refs=estimateReferences(),context=fileContext(files).slice(0,6).map(f=>({...f,text:typeof f.text==='string'?f.text.slice(0,12000):f.text}));
-   const result=await askAI(j.id,estimatePrompt(parameters,refs,context),estimateSchema,imageInputs(files),()=>{},'low',{allowCostAssumptions:true});if(j.status==='cancelled')return;
-   const estimate={...evaluateEstimate(result,refs,parameters,files.map(f=>f.id)),id:uid('estimate-result'),jobId:j.id,createdAt:new Date().toISOString(),parameterKey:parameterKey(parameters),sourceFiles:filesSnapshot(files),referenceScope:'历史库中的代表性组件，不是完整供货范围；文件最多读取前6份、每份前12000字符和前3张图像，不代表完整图纸审查。'};
-   getProject(p.id);p.estimates||=[];p.estimates.push(estimate);saveWorkspace();j.estimateId=estimate.id;j.status='completed';save();
-  }catch(e){if(j.status!=='cancelled'){j.status='failed';j.error=redact(e.message);}save();}})();
+   const result=await recoverEstimate({id:j.id,parameters,refs,context,fileIds:files.map(f=>f.id),images:imageInputs(files),askAI,cancelled:()=>j.status==='cancelled',onAttempt:detail=>{j.estimateDiagnostics={...detail,startedAt:new Date().toISOString()};save();},onRecovery:detail=>{j.phase=detail.reason==='connection'?'生成连接暂时中断，正在自动重试':'正在核对并纠正三档方案';j.estimateDiagnostics={...detail,updatedAt:new Date().toISOString()};save();console.info(JSON.stringify({event:'estimate-recovery',jobId:j.id,...detail}));}});if(j.status==='cancelled')return;
+   const estimate={...result,id:uid('estimate-result'),jobId:j.id,createdAt:new Date().toISOString(),parameterKey:parameterKey(parameters),sourceFiles:filesSnapshot(files),referenceScope:'历史库中的代表性组件，不是完整供货范围；文件最多读取前6份、每份前12000字符和前3张图像，不代表完整图纸审查。'};
+   getProject(p.id);p.estimates||=[];p.estimates.push(estimate);saveWorkspace();j.estimateId=estimate.id;j.status='completed';j.completedAt=new Date().toISOString();save();
+  }catch(e){if(j.status!=='cancelled'){j.status='failed';j.error=redact(e.message);j.completedAt=new Date().toISOString();console.warn(JSON.stringify({event:'estimate-failed',jobId:j.id,code:e.code||'ESTIMATE_FAILED'}));}save();}})();
  });
  app.post('/api/preview/projects/:id/direction',async(req,res)=>{
   const p=getProject(req.params.id);idle(p.id);const input=directionInput(req.body),estimate=p.estimates?.find(e=>e.id===req.body.estimateId);

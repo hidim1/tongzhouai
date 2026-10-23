@@ -11,6 +11,12 @@ after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const valid={answer:'已完成资料整理。',files:[]};
 const reviewSchema={type:'object',properties:{acceptable:{type:'boolean'},problems:{type:'array',items:{type:'string'}},repairs:{type:'array',items:{type:'string'}}},required:['acceptable','problems','repairs'],additionalProperties:false};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
+test('快速估算协议错误保留内部草稿回调，失败先清理旧轮次再交给恢复流程',async t=>{
+ const f=fixture(t);let draft='';
+ const result=askAI('test-'+seq,'快速估算',reviewSchema,[],undefined,'low',{cleanupOnFailure:true,onResultText:text=>draft=text});
+ const rejected=assert.rejects(result,{code:'AI_RESULT_FORMAT'});await flush();f.item({acceptable:'wrong',problems:[],repairs:[]});f.complete('completed');await rejected;
+ assert.match(draft,/wrong/);assert.equal(f.calls.filter(c=>c.method==='interrupt').length,1);assert.equal(f.calls.filter(c=>c.method==='turn/start').length,1);
+});
 let seq=0;
 function fixture(t,options={}){
  const originals={connect:previewAI.connect,request:previewAI.request,interrupt:previewAI.interrupt};

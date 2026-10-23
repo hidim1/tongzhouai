@@ -14,6 +14,7 @@ files:
   - main.cjs
   - preload.cjs
   - credentials.cjs
+  - navigation.cjs
   - package.json
   - icon.png
   - '!node_modules/**/*'

@@ -18,7 +18,7 @@ for(const filename of [setup,path.join(dir,'win-unpacked/舟知.exe')]){
  if(filename.endsWith('/舟知.exe'))assert.equal(exe.newHeader.fileHeader.machine,0x8664);
 }
 const archive=path.join(dir,'win-unpacked/resources/app.asar');
-const names=['credentials.cjs','icon.png','main.cjs','package.json','preload.cjs'];
+const names=['credentials.cjs','icon.png','main.cjs','navigation.cjs','package.json','preload.cjs'];
 assert.deepEqual(asar.listPackage(archive).sort(),names.map(n=>'/'+n));
 for(const name of names)assert.deepEqual(asar.extractFile(archive,name),fs.readFileSync(path.join(root,'member-client',name)));
 const sha256=createHash('sha256').update(fs.readFileSync(setup)).digest('hex');

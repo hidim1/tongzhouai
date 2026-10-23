@@ -1,0 +1,53 @@
+/* Single theme for every application-owned scroll container, including the page,
+   tables, textareas and server-rendered authentication dialogs. No overflow or
+   gutter rules here: those belong to each container's layout. */
+:root {
+  --zh-scroll-idle: #7397a340;
+  --zh-scroll-active: #7397a370;
+  --zh-scroll-hover: #62889799;
+}
+* {
+  /* Reset per element so a hovered ancestor does not change unrelated thumbs. */
+  --zh-scroll-thumb: var(--zh-scroll-idle);
+  scrollbar-width: thin;
+  scrollbar-color: var(--zh-scroll-thumb) transparent;
+}
+*:not(html):not(body):is(:hover, :focus-within),
+*:is(:focus-visible, .is-scrolling, [data-zh-scrolling]) {
+  --zh-scroll-thumb: var(--zh-scroll-active);
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: var(--zh-scroll-thumb);
+  border-radius: 10px;
+  min-height: 32px;
+  min-width: 32px;
+}
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active { background-color: var(--zh-scroll-hover); }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+/* Chromium/Electron prefer standard scrollbar properties over WebKit sizing.
+   Use their native pseudo-elements for an exact 6px track; Firefox stays thin. */
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+}
+/* Keep a larger, visible native target where there is no hover interaction. */
+@media (hover: none) {
+  * { --zh-scroll-idle: var(--zh-scroll-active); }
+}
+@media (hover: none) and (pointer: coarse) {
+  * { scrollbar-width: auto; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+}
+/* In high contrast mode, let the OS supply width and accessible system colors. */
+@media (forced-colors: active) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  *::-webkit-scrollbar { width: revert; height: revert; }
+  *::-webkit-scrollbar-thumb { background-color: ButtonText; }
+  *::-webkit-scrollbar-thumb:hover,
+  *::-webkit-scrollbar-thumb:active { background-color: Highlight; }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner { background: Canvas; }
+}

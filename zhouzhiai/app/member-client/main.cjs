@@ -1,5 +1,6 @@
-const {app,BrowserWindow,Menu,dialog,safeStorage,ipcMain}=require('electron');
+const {app,BrowserWindow,Menu,dialog,safeStorage,ipcMain,shell}=require('electron');
 const {createCredentialStore,isLoginSender}=require('./credentials.cjs');
+const {installNavigation}=require('./navigation.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const {randomBytes}=require('node:crypto');
@@ -27,9 +28,7 @@ async function start(){
  session.setPermissionRequestHandler((_web,_permission,callback)=>callback(false));
  session.webRequest.onBeforeSendHeaders({urls:[origin+'/*']},(details,callback)=>{callback({requestHeaders:{...details.requestHeaders,'X-Zhouzhi-Installation':installation}});});
  session.webRequest.onBeforeRequest((details,callback)=>{let allowed=false;try{allowed=new URL(details.url).origin===origin||details.url.startsWith('devtools://');}catch{}callback({cancel:!allowed});});
- window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
- window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});
- window.webContents.on('will-redirect',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});
+ installNavigation({window,origin,shell,dialog});
  window.webContents.on('page-title-updated',event=>{event.preventDefault();window.setTitle('舟知');});
  session.on('will-download',(_event,item)=>{item.setSaveDialogOptions({title:'保存舟知成果',defaultPath:path.join(app.getPath('downloads'),path.basename(item.getFilename()))});});
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'舟知',submenu:[{label:'刷新',click:()=>window.webContents.reload()},{label:'退出',role:'quit'}]},{label:'编辑',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]}]));

@@ -158,7 +158,7 @@ export async function askAI(...args){
   try{return await askAIAttempt(attempt,...args);}
   finally{const active=attempts.get(id);active?.delete(attempt);if(!active?.size)attempts.delete(id);finish();}
 }
-async function askAIAttempt(attempt,id, text, schema, images=[], progress=()=>{}, effort='medium', {allowCostAssumptions=false,allowWebSearch=false,timeoutMs=480000,completeOnFinal=false,onPhase=()=>{},deliveryInstructions='',onReferences=()=>{},onSearchEvent=()=>{},formatRetry=0,guidanceRounds=0,conversation=null,onConversation=()=>{},tools=null,allowSteering=true,privateResult=false}={}) {
+async function askAIAttempt(attempt,id, text, schema, images=[], progress=()=>{}, effort='medium', {allowCostAssumptions=false,allowWebSearch=false,timeoutMs=480000,completeOnFinal=false,onPhase=()=>{},deliveryInstructions='',onReferences=()=>{},onSearchEvent=()=>{},formatRetry=0,guidanceRounds=0,conversation=null,onConversation=()=>{},tools=null,allowSteering=true,privateResult=false,onResultText=()=>{},cleanupOnFailure=false}={}) {
   if(!Number.isFinite(timeoutMs)||timeoutMs<0)throw new Error('任务等待配置无效');
   assertActive(attempt);
   await previewAI.connect();
@@ -188,7 +188,8 @@ async function askAIAttempt(attempt,id, text, schema, images=[], progress=()=>{}
   const parse=text=>{
     lastText=text;
     if(completeOnFinal)return parseAIResult(text,schema,{completeOnFinal,privateResult});
-    try{return parseAIResult(text,schema,{privateResult});}catch(error){throw new Error(error.message.includes('内部信息')?error.message:'AI未返回有效结构化结果，请重试');}
+    onResultText(redact(String(text)).slice(0,120000));
+    try{return parseAIResult(text,schema,{privateResult});}catch(error){if(error.message.includes('内部信息'))throw error;throw aiFailure('AI_RESULT_FORMAT','AI未返回有效结构化结果，请重试');}
   };
   const result = new Promise((resolve,reject) => {
     let settled=false;
@@ -234,7 +235,7 @@ async function askAIAttempt(attempt,id, text, schema, images=[], progress=()=>{}
     }
     onReferences(value.sources);return value.output;
   }catch(error){
-    if(completeOnFinal&&turnId&&!turnEnded)await interruptAttempt(attempt);
+    if((completeOnFinal||cleanupOnFailure)&&turnId&&!turnEnded)await interruptAttempt(attempt);
     if(completeOnFinal&&error.code==='AI_RESULT_FORMAT'&&formatRetry===0&&!cancelled.has(id)&&!attempt.stopped){
       onPhase('正在核对并整理答复');
       const recover=Object.hasOwn(schema.properties,'answer')?recoverFormatInstructions:'只依据上一轮已有资料纠正为本轮schema要求的完整JSON，并在final_answer正式提交。sources填空数组，不额外添加answer、文件、事实或解释字段，不重新联网或生图。';
